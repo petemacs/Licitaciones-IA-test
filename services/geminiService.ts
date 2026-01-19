@@ -12,9 +12,11 @@ if (typeof window !== 'undefined' && 'Worker' in window) {
 }
 
 const getAiClient = () => {
-  const key = process.env.API_KEY;
-  if (!key) {
-    throw new Error("API Key no encontrada. Configura la variable de entorno API_KEY.");
+  // Intentamos obtener la clave de múltiples fuentes posibles inyectadas por Vite
+  const key = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+  
+  if (!key || key === "undefined" || key === "") {
+    throw new Error("API Key no encontrada. Asegúrate de que la variable API_KEY esté configurada en Netlify y hayas hecho un 'Deploy project'.");
   }
   return new GoogleGenAI({ apiKey: key });
 };
@@ -230,7 +232,7 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<{
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: 'user', parts: [filePart, { text: prompt }] }],
       config: {
         responseMimeType: "application/json",
@@ -276,7 +278,7 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
   };
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3-flash-preview",
     contents: [{ role: 'user', parts: parts }],
     config: { systemInstruction: buildAnalysisSystemPrompt(rules), responseMimeType: "application/json", responseSchema: responseSchema },
   });
