@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layout, Search, Loader2, Archive, Grid, ArrowUpDown, Calendar, ExternalLink, Inbox, Clock, ArrowRightCircle, HelpCircle, XCircle, Filter, ChevronDown, Check } from 'lucide-react';
+import { Layout, Search, Loader2, Archive, Grid, ArrowUpDown, Calendar, Inbox, Clock, ArrowRightCircle, HelpCircle, XCircle, Filter, ChevronDown, Check } from 'lucide-react';
 import NewTenderForm from './components/NewTenderForm';
 import BusinessRulesEditor from './components/BusinessRulesEditor';
 import TenderCard from './components/TenderCard';

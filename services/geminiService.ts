@@ -69,7 +69,7 @@ export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
         const urlRegex = /((https?:\/\/|www\.)[^\s<>"']+|[a-zA-Z0-9\-\.]+\.(es|com|org|net|gob)\/[^\s<>"']*)/gi;
         const matches = textStr.match(urlRegex);
         if (matches) {
-          matches.forEach(url => {
+          matches.forEach((url: string) => {
             let cleanUrl = url.replace(/[.,;)]+$/, "");
             if (cleanUrl.startsWith('www.')) cleanUrl = 'https://' + cleanUrl;
             else if (!cleanUrl.startsWith('http')) cleanUrl = 'https://' + cleanUrl;

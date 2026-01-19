@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Upload, Link as LinkIcon, FileText, X, Loader2, FileCheck, AlertTriangle, Trash2, Globe, ExternalLink, Terminal, Euro, BarChart3, Fingerprint, CalendarDays, ShieldAlert } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, FileText, X, Loader2, FileCheck, Trash2, Globe, Euro, BarChart3, Fingerprint, CalendarDays, ShieldAlert } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
-import { extractMetadataFromTenderFile, downloadFileFromUrl, scrapeDocsFromWeb, extractLinksFromPdf, probeLinksInBatches } from '../services/geminiService';
+import { extractMetadataFromTenderFile, scrapeDocsFromWeb, extractLinksFromPdf, probeLinksInBatches } from '../services/geminiService';
 
 interface Props {
   onAddTender: (tender: TenderDocument) => void;
@@ -19,16 +19,13 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
   const [expedientNumber, setExpedientNumber] = useState('');
   const [deadline, setDeadline] = useState('');
   const [tenderPageUrl, setTenderPageUrl] = useState('');
-  const [adminUrl, setAdminUrl] = useState('');
   const [adminFile, setAdminFile] = useState<File | null>(null);
-  const [techUrl, setTechUrl] = useState('');
   const [techFile, setTechFile] = useState<File | null>(null);
   const [summaryFile, setSummaryFile] = useState<File | null>(null);
 
   // UI State
   const [isExtracting, setIsExtracting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const [downloadError, setDownloadError] = useState<{show: boolean, msg: string}>({show: false, msg: ""});
   const [duplicateError, setDuplicateError] = useState(false);
   
   // Drag State
@@ -67,9 +64,9 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
       expedientNumber,
       deadline,
       tenderPageUrl,
-      adminUrl,
+      adminUrl: "", // URL set by file or web scrape
       adminFile,
-      techUrl,
+      techUrl: "", // URL set by file or web scrape
       techFile,
       summaryFile,
       status: TenderStatus.PENDING,
@@ -88,13 +85,10 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
     setExpedientNumber('');
     setDeadline('');
     setTenderPageUrl('');
-    setAdminUrl('');
     setAdminFile(null);
-    setTechUrl('');
     setTechFile(null);
     setSummaryFile(null);
     setLogs([]);
-    setDownloadError({show: false, msg: ""});
     setDuplicateError(false);
   };
 
@@ -102,7 +96,6 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
     if (!tenderPageUrl) return;
     setIsExtracting(true);
     setLogs(["> Iniciando escaneo manual..."]);
-    setDownloadError({show: false, msg: ""});
     
     try {
       addLog("> Buscando documentos en la web...");
@@ -118,12 +111,6 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
          
          if (results.admin) { setAdminFile(results.admin); addLog("  [OK] PCAP descargado"); }
          if (results.tech) { setTechFile(results.tech); addLog("  [OK] PPT descargado"); }
-         
-         if (!results.admin && !results.tech) {
-            setDownloadError({ show: true, msg: "Documentos no accesibles automáticamente." });
-         }
-      } else {
-         setDownloadError({ show: true, msg: "No se encontraron enlaces a documentos." });
       }
     } finally {
       setIsExtracting(false);
@@ -135,7 +122,6 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
       setSummaryFile(file);
       setIsExtracting(true);
       setLogs(["> Iniciando motor de análisis..."]);
-      setDownloadError({show: false, msg: ""});
       
       try {
         const metadataPromise = extractMetadataFromTenderFile(file).then(data => {
@@ -187,7 +173,7 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
         }
         addLog("> Proceso completado.");
       } catch (err: any) {
-        setDownloadError({show: true, msg: "Fallo en análisis: " + err.message});
+        addLog("  [ERROR] " + err.message);
       } finally {
         setIsExtracting(false);
       }
