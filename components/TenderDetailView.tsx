@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Calendar, Euro, FileText, BarChart3, Download, ExternalLink, FileSpreadsheet, FileCode, File, Sparkles, ChevronDown, Archive, XCircle, HelpCircle, ArrowRightCircle, Clock, Target, Users, ShieldAlert, Lightbulb } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
@@ -213,7 +212,7 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                        {/* Section: Economic */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                             <Euro className="text-emerald-400" /> Análisis Económico
+                             <Euro className="text-emerald-400" /> 1. Análisis Económico
                           </h3>
                           <div className="grid grid-cols-2 gap-4">
                              <div className="bg-neutral-900 p-4 rounded-xl border border-white/5">
@@ -230,15 +229,15 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                        {/* Section: Scope */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                             <Target className="text-blue-400" /> Alcance del Servicio
+                             <Target className="text-blue-400" /> 2. Alcance del Servicio
                           </h3>
                           <div className="bg-neutral-900 p-5 rounded-xl border border-white/5 space-y-4">
                              <div>
-                                <p className="text-xs text-neutral-500 uppercase font-bold mb-2">Objetivo</p>
+                                <p className="text-xs text-neutral-500 uppercase font-bold mb-2">Resumen del Objeto</p>
                                 <p className="text-neutral-200 leading-relaxed text-sm">{analysis.scope.objective}</p>
                              </div>
                              <div>
-                                <p className="text-xs text-neutral-500 uppercase font-bold mb-2">Entregables</p>
+                                <p className="text-xs text-neutral-500 uppercase font-bold mb-2">Entregables Clave</p>
                                 <ul className="list-disc list-inside space-y-1 text-neutral-300 text-sm">
                                    {analysis.scope.deliverables.map((d, i) => <li key={i}>{d}</li>)}
                                 </ul>
@@ -249,15 +248,19 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                        {/* Section: Resources */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                             <Users className="text-amber-400" /> Recursos y Equipo
+                             <Users className="text-amber-400" /> 3. Recursos y Cronograma
                           </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="bg-neutral-900 p-4 rounded-xl border border-white/5">
                                 <p className="text-xs text-neutral-500 uppercase font-bold mb-1">Duración</p>
                                 <p className="text-neutral-200 text-sm">{analysis.resources.duration}</p>
                              </div>
+                             <div className="bg-neutral-900 p-4 rounded-xl border border-white/5">
+                                <p className="text-xs text-neutral-500 uppercase font-bold mb-1">Dedicación</p>
+                                <p className="text-neutral-200 text-sm">{analysis.resources.dedication}</p>
+                             </div>
                              <div className="bg-neutral-900 p-4 rounded-xl border border-white/5 md:col-span-2">
-                                <p className="text-xs text-neutral-500 uppercase font-bold mb-1">Equipo Exigido</p>
+                                <p className="text-xs text-neutral-500 uppercase font-bold mb-1">Equipo Mínimo Exigido</p>
                                 <p className="text-neutral-200 text-sm">{analysis.resources.team}</p>
                              </div>
                           </div>
@@ -266,7 +269,7 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                         {/* Section: Solvency */}
                         <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                             <ShieldAlert className="text-red-400" /> Solvencia y Riesgos
+                             <ShieldAlert className="text-red-400" /> 4. Requisitos Bloqueantes y Solvencia
                           </h3>
                           <div className="space-y-4">
                               <div className="bg-neutral-900 p-4 rounded-xl border border-white/5 flex gap-4 items-start">
@@ -274,7 +277,7 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                                  <div className="text-neutral-200 text-sm">{analysis.solvency.certifications}</div>
                               </div>
                               <div className="bg-neutral-900 p-4 rounded-xl border border-white/5 flex gap-4 items-start">
-                                 <div className="min-w-[120px] text-xs text-neutral-500 uppercase font-bold pt-1">Solvencia</div>
+                                 <div className="min-w-[120px] text-xs text-neutral-500 uppercase font-bold pt-1">Solvencia Específica</div>
                                  <div className="text-neutral-200 text-sm">{analysis.solvency.specificSolvency}</div>
                               </div>
                               {analysis.solvency.penalties && (
@@ -289,10 +292,17 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                        {/* Section: Strategy */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                             <Lightbulb className="text-yellow-400" /> Enfoque Estratégico
+                             <Lightbulb className="text-yellow-400" /> 5. Enfoque Estratégico Sugerido
                           </h3>
-                          <div className="bg-yellow-950/10 p-5 rounded-xl border border-yellow-500/20">
-                             <p className="text-yellow-100/80 italic text-base leading-relaxed">"{analysis.strategy.angle}"</p>
+                          <div className="space-y-4">
+                             <div className="bg-neutral-900 p-4 rounded-xl border border-white/5">
+                                <p className="text-xs text-neutral-500 uppercase font-bold mb-2">Criterios de Valoración</p>
+                                <p className="text-neutral-200 text-sm">{analysis.strategy.valuationCriteria}</p>
+                             </div>
+                             <div className="bg-yellow-950/10 p-5 rounded-xl border border-yellow-500/20">
+                                <p className="text-xs text-yellow-500/70 uppercase font-bold mb-2">Ángulo de Ataque</p>
+                                <p className="text-yellow-100/80 italic text-base leading-relaxed">"{analysis.strategy.angle}"</p>
+                             </div>
                           </div>
                        </section>
 

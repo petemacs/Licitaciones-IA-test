@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TenderDocument, AnalysisResult } from "../types";
 // @ts-ignore
@@ -12,34 +11,55 @@ if (typeof window !== 'undefined' && 'Worker' in window) {
 }
 
 const getAiClient = () => {
-  // Intentamos obtener la clave de múltiples fuentes posibles inyectadas por Vite
-  const key = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
-  
-  if (!key || key === "undefined" || key === "") {
-    throw new Error("API Key no encontrada. Asegúrate de que la variable API_KEY esté configurada en Netlify y hayas hecho un 'Deploy project'.");
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined" || apiKey === "") {
+    throw new Error("API Key no configurada. Verifica las variables de entorno.");
   }
-  return new GoogleGenAI({ apiKey: key });
+  return new GoogleGenAI({ apiKey });
 };
 
-const fileToPart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        const base64Data = reader.result.split(',')[1];
-        resolve({
-          inlineData: {
-            data: base64Data,
-            mimeType: file.type,
-          },
-        });
-      } else {
-        reject(new Error("Failed to read file"));
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+/**
+ * Convierte un archivo a una parte compatible con Gemini.
+ * Si el tipo es soportado para multimodal (PDF, Imágenes), usa inlineData.
+ * Si es un tipo basado en texto (XML, JSON, Texto), lo lee y lo envía como texto.
+ */
+const fileToPart = async (file: File): Promise<{ inlineData?: { data: string; mimeType: string }; text?: string } | null> => {
+  const supportedInlineTypes = [
+    'application/pdf',
+    'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'
+  ];
+
+  if (supportedInlineTypes.includes(file.type)) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          const base64Data = reader.result.split(',')[1];
+          resolve({
+            inlineData: {
+              data: base64Data,
+              mimeType: file.type,
+            },
+          });
+        } else {
+          reject(new Error("Failed to read file as base64"));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  } else if (file.type.includes('text') || file.type.includes('xml') || file.type.includes('json') || file.name.endsWith('.xml') || file.name.endsWith('.json')) {
+    try {
+      const textContent = await file.text();
+      return { text: `Contenido del archivo ${file.name}:\n${textContent.substring(0, 50000)}` }; // Cap at 50k chars for safety
+    } catch (e) {
+      console.warn("Could not read file as text:", file.name);
+      return { text: `[Archivo adjunto: ${file.name} (No se pudo leer el texto)]` };
+    }
+  } else {
+    // Para archivos no soportados (ZIP, DOCX), simplemente indicamos su existencia
+    return { text: `[Archivo adjunto no procesable directamente: ${file.name} (${file.type})]` };
+  }
 };
 
 const normalizeText = (text: string) => {
@@ -94,7 +114,8 @@ export const downloadFileFromUrl = async (url: string, defaultPrefix: string): P
       const response = await fetch(fetchUrl);
       if (!response.ok) return null;
       const blob = await response.blob();
-      if (blob.type.includes('text/html') || blob.size < 2000) return null;
+      // Ignoramos HTML y archivos demasiado pequeños que suelen ser errores de redirección
+      if (blob.type.includes('text/html') || blob.size < 500) return null;
       let filename = "";
       const disposition = response.headers.get('Content-Disposition');
       if (disposition && disposition.includes('filename=')) {
@@ -122,6 +143,7 @@ export const downloadFileFromUrl = async (url: string, defaultPrefix: string): P
       if (blob.type === "application/pdf") extension = ".pdf";
       else if (blob.type.includes("zip")) extension = ".zip";
       else if (blob.type.includes("word")) extension = ".docx";
+      else if (blob.type.includes("xml")) extension = ".xml";
     }
     const finalName = filename || `${defaultPrefix}_${new Date().getTime()}${extension}`;
     return new File([blob], finalName, { type: blob.type });
@@ -197,9 +219,12 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<{
 }> => {
   const ai = getAiClient();
   const filePart = await fileToPart(file);
+  const parts: any[] = [];
+  if (filePart) parts.push(filePart);
 
   const prompt = `
-    Analiza este documento de licitación (Hoja Resumen). Extrae los siguientes datos con precisión:
+    Analiza este documento de licitación (Hoja Resumen). Extrae los siguientes datos con precisión.
+    IMPORTANTE: Toda la información debe ser redactada en IDIOMA ESPAÑOL.
     
     1. NAME: Título completo del expediente.
     2. BUDGET: Presupuesto base de licitación o valor estimado (SIN IMPUESTOS). Incluye el símbolo de moneda.
@@ -213,6 +238,7 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<{
     
     Responde estrictamente en JSON.
   `;
+  parts.push({ text: prompt });
 
   const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -233,34 +259,78 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<{
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: [{ role: 'user', parts: [filePart, { text: prompt }] }],
+      contents: [{ role: 'user', parts }],
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
       },
     });
 
-    const text = response.text;
-    if (!text) return { name: "", adminUrl: "", techUrl: "", tenderPageUrl: "", budget: "", scoringSystem: "", expedientNumber: "", deadline: "", allLinks: [] };
-    return JSON.parse(text);
-  } catch (error) { throw error; }
+    return JSON.parse(response.text || "{}");
+  } catch (error) { 
+    console.error("Error in extractMetadata:", error);
+    throw error; 
+  }
 };
 
 export const buildAnalysisSystemPrompt = (rules: string) => {
   return `
     Actúa como un Analista Senior de Licitaciones Públicas (Bid Manager). Analiza los pliegos (PCAP y PPT).
     REGLAS DE NEGOCIO: ${rules}
+
+    Tu objetivo es generar un "Informe Ejecutivo de Viabilidad" para decidir el Go/No-Go. Debes analizar el texto proporcionado y extraer EXCLUSIVAMENTE la siguiente información estructurada. Sé crítico: si falta información, indícalo.
+    
+    IMPORTANTE: Todo el contenido del informe y cualquier texto generado DEBE estar obligatoriamente en IDIOMA ESPAÑOL.
+
+    DEBES REALIZAR EL ANÁLISIS EN LOS SIGUIENTES 6 APARTADOS OBLIGATORIOS:
+
+    1. ANÁLISIS ECONÓMICO (PRECIO Y COSTES)
+    - Presupuesto Base de Licitación (Sin IVA): [Cifra exacta]
+    - Modelo de Precio: ¿Es a tanto alzado (precio cerrado total) o precios unitarios (pago por uso/hora)?
+    - Base del Cálculo: ¿Qué incluye el precio? (Ej: ¿Incluye dietas, desplazamientos, licencias de software, repuestos?). Extrae cualquier detalle que afecte al cálculo de costes directos.
+
+    2. ALCANCE DEL SERVICIO (QUÉ HAY QUE HACER)
+    - Resumen del Objeto: Explica en 2-3 frases sencillas qué trabajo físico o intelectual hay que entregar. Evita la jerga legal.
+    - Entregables Clave: Lista los productos/informes/servicios principales que se esperan.
+
+    3. RECURSOS Y CRONOGRAMA
+    - Duración: [Meses/Años] + [Posibles Prórrogas].
+    - Equipo Mínimo Exigido (Adscripción de Medios): Lista los perfiles obligatorios, titulaciones requeridas y años de experiencia mínimos especificados.
+    - Dedicación: ¿Se exige dedicación exclusiva o presencialidad en las oficinas del cliente?
+
+    4. REQUISITOS BLOQUEANTES Y SOLVENCIA (CRÍTICO)
+    - Certificaciones: ¿Se exige ISO 9001, 14001, ENS (Esquema Nacional de Seguridad) o alguna clasificación empresarial específica (Grupo/Subgrupo)?
+    - Solvencia Técnica Específica: ¿Piden haber realizado proyectos idénticos por un importe concreto en los últimos 3 años? (Detalla la cifra o el número de trabajos).
+    - Penalidades: ¿Hay alguna cláusula de penalización inusual o muy agresiva que deba conocer?
+
+    5. ENFOQUE ESTRATÉGICO SUGERIDO
+    - Criterios de Valoración: Resume rápido: ¿Gana el más barato (Subasta) o importa la calidad? (Ej: 60% Precio / 40% Técnico).
+    - Ángulo de Ataque: Basado en lo anterior, ¿cómo deberíamos plantear la propuesta? (Ej: "Centrarse en automatizar para bajar precio" o "Destacar la metodología para ganar los puntos subjetivos").
+
+    6. PUNTUACIÓN
+    - Pon el modelo de puntuación y revisa que piden en cada apartado de puntuación.
+
     DECISIÓN FINAL: KEEP, DISCARD, REVIEW.
-    Responde en JSON con Economic, Scope, Resources, Solvency, Strategy y Scoring Breakdown.
+    Responde estrictamente en JSON.
   `;
 };
 
 export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: string): Promise<AnalysisResult> => {
   const ai = getAiClient();
   const parts: any[] = [{ text: `Expediente: ${tender.name}\nPresupuesto: ${tender.budget}\nCriterios: ${tender.scoringSystem}` }];
-  if (tender.summaryFile) parts.push(await fileToPart(tender.summaryFile));
-  if (tender.adminFile) parts.push(await fileToPart(tender.adminFile));
-  if (tender.techFile) parts.push(await fileToPart(tender.techFile));
+  
+  if (tender.summaryFile) {
+    const part = await fileToPart(tender.summaryFile);
+    if (part) parts.push(part);
+  }
+  if (tender.adminFile) {
+    const part = await fileToPart(tender.adminFile);
+    if (part) parts.push(part);
+  }
+  if (tender.techFile) {
+    const part = await fileToPart(tender.techFile);
+    if (part) parts.push(part);
+  }
 
   const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -271,16 +341,27 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
       scope: { type: Type.OBJECT, properties: { objective: { type: Type.STRING }, deliverables: { type: Type.ARRAY, items: { type: Type.STRING } } } },
       resources: { type: Type.OBJECT, properties: { duration: { type: Type.STRING }, team: { type: Type.STRING }, dedication: { type: Type.STRING } } },
       solvency: { type: Type.OBJECT, properties: { certifications: { type: Type.STRING }, specificSolvency: { type: Type.STRING }, penalties: { type: Type.STRING } } },
-      strategy: { type: Type.OBJECT, properties: { angle: { type: Type.STRING } } },
+      strategy: { type: Type.OBJECT, properties: { valuationCriteria: { type: Type.STRING }, angle: { type: Type.STRING } } },
       scoring: { type: Type.OBJECT, properties: { priceWeight: { type: Type.NUMBER }, formulaWeight: { type: Type.NUMBER }, valueWeight: { type: Type.NUMBER }, details: { type: Type.STRING }, subCriteria: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, weight: { type: Type.NUMBER }, category: { type: Type.STRING, enum: ["PRICE", "FORMULA", "VALUE"] } } } } }, required: ["priceWeight", "formulaWeight", "valueWeight", "details", "subCriteria"] },
+      registrationChecklist: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { task: { type: Type.STRING }, description: { type: Type.STRING }, completed: { type: Type.BOOLEAN } } } }
     },
-    required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring"],
+    required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring", "registrationChecklist"],
   };
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ role: 'user', parts: parts }],
-    config: { systemInstruction: buildAnalysisSystemPrompt(rules), responseMimeType: "application/json", responseSchema: responseSchema },
-  });
-  return JSON.parse(response.text!);
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: 'user', parts: parts }],
+      config: { 
+        systemInstruction: buildAnalysisSystemPrompt(rules), 
+        responseMimeType: "application/json", 
+        responseSchema: responseSchema,
+      },
+    });
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    throw error;
+  }
 };

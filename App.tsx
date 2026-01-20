@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layout, Search, Loader2, Archive, Grid, ArrowUpDown, Calendar, Inbox, Clock, ArrowRightCircle, HelpCircle, XCircle, Filter, ChevronDown, Check } from 'lucide-react';
+import { Layout, Search, Loader2, Archive, Grid, ArrowUpDown, Calendar, Inbox, Clock, ArrowRightCircle, HelpCircle, XCircle, Filter, ChevronDown, Check, ShieldAlert, Trash2 } from 'lucide-react';
 import NewTenderForm from './components/NewTenderForm';
 import BusinessRulesEditor from './components/BusinessRulesEditor';
 import TenderCard from './components/TenderCard';
@@ -11,6 +11,15 @@ import { loadTendersFromStorage, saveTendersToStorage, loadRulesFromStorage, sav
 
 type ViewMode = 'BOARD' | 'ARCHIVE';
 
+// Configuración de estados global para consistencia
+const statusConfigs = {
+  [TenderStatus.PENDING]: { label: 'PENDIENTE', color: 'text-neutral-400', border: 'border-neutral-700', icon: Clock },
+  [TenderStatus.IN_PROGRESS]: { label: 'EN TRAMITE', color: 'text-lime-400', border: 'border-lime-500/30', icon: ArrowRightCircle },
+  [TenderStatus.IN_DOUBT]: { label: 'EN DUDA', color: 'text-amber-400', border: 'border-amber-500/30', icon: HelpCircle },
+  [TenderStatus.REJECTED]: { label: 'DESCARTADO', color: 'text-red-400', border: 'border-red-500/30', icon: XCircle },
+  [TenderStatus.ARCHIVED]: { label: 'ARCHIVADO', color: 'text-purple-400', border: 'border-purple-500/30', icon: Archive },
+};
+
 const App: React.FC = () => {
   const DEFAULT_RULES = "1. Verificar requisitos de solvencia técnica: ¿Se exigen certificaciones específicas (ISO 9001, 14001, ENS, etc)?\n2. Si piden certificaciones obligatorias que no poseemos, marcar para descartar.";
 
@@ -18,6 +27,7 @@ const App: React.FC = () => {
   const [tenders, setTenders] = useState<TenderDocument[]>([]);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [selectedTender, setSelectedTender] = useState<TenderDocument | null>(null);
+  const [tenderToDelete, setTenderToDelete] = useState<TenderDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,6 +82,21 @@ const App: React.FC = () => {
 
   const handleAddTender = (newTender: TenderDocument) => setTenders(prev => [newTender, ...prev]);
 
+  const handleDeleteTenderRequest = (tenderId: string) => {
+    const tender = tenders.find(t => t.id === tenderId);
+    if (tender) {
+      setTenderToDelete(tender);
+    }
+  };
+
+  const confirmDeleteTender = () => {
+    if (tenderToDelete) {
+      setTenders(prev => prev.filter(t => t.id !== tenderToDelete.id));
+      if (selectedTender?.id === tenderToDelete.id) setSelectedTender(null);
+      setTenderToDelete(null);
+    }
+  };
+
   const handleStatusChange = (tenderId: string, newStatus: TenderStatus) => {
     setTenders(prev => prev.map(t => t.id === tenderId ? { ...t, status: newStatus } : t));
     if (selectedTender?.id === tenderId) setSelectedTender(prev => prev ? { ...prev, status: newStatus } : null);
@@ -79,7 +104,7 @@ const App: React.FC = () => {
 
   const handleAnalyze = async (tender: TenderDocument) => {
     if (!process.env.API_KEY) {
-       setError("API KEY no encontrada.");
+       setError("API KEY no encontrada. Revisa tu configuración.");
        setTimeout(() => setError(null), 5000);
        return;
     }
@@ -93,9 +118,10 @@ const App: React.FC = () => {
       const updatedTender = { ...tender, status: newStatus, aiAnalysis: analysis };
       setTenders(prev => prev.map(t => t.id === tender.id ? updatedTender : t));
       if (selectedTender?.id === tender.id) setSelectedTender(updatedTender);
-    } catch (err) {
-      setError("Error al analizar el pliego.");
-      setTimeout(() => setError(null), 5000);
+    } catch (err: any) {
+      console.error("Análisis fallido:", err);
+      setError(`Error al analizar: ${err.message || "Fallo en la API de Gemini"}`);
+      setTimeout(() => setError(null), 7000);
     } finally {
       setAnalyzingIds(prev => { const next = new Set(prev); next.delete(tender.id); return next; });
     }
@@ -122,14 +148,6 @@ const App: React.FC = () => {
       if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     return dateStr;
-  };
-
-  const statusConfigs = {
-    [TenderStatus.PENDING]: { label: 'PENDIENTE', color: 'text-neutral-400', border: 'border-neutral-700', icon: Clock },
-    [TenderStatus.IN_PROGRESS]: { label: 'EN TRAMITE', color: 'text-lime-400', border: 'border-lime-500/30', icon: ArrowRightCircle },
-    [TenderStatus.IN_DOUBT]: { label: 'EN DUDA', color: 'text-amber-400', border: 'border-amber-500/30', icon: HelpCircle },
-    [TenderStatus.REJECTED]: { label: 'DESCARTADO', color: 'text-red-400', border: 'border-red-500/30', icon: XCircle },
-    [TenderStatus.ARCHIVED]: { label: 'ARCHIVADO', color: 'text-purple-400', border: 'border-purple-500/30', icon: Archive },
   };
 
   const getStatusBadge = (status: TenderStatus) => {
@@ -168,6 +186,40 @@ const App: React.FC = () => {
 
       {selectedTender && <TenderDetailView tender={selectedTender} onClose={() => setSelectedTender(null)} onStatusChange={handleStatusChange} />}
 
+      {/* MODAL DE ELIMINACIÓN PERSONALIZADO */}
+      {tenderToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-neutral-900 border border-white/10 p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-6 border border-red-500/20">
+                <ShieldAlert size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Eliminar Expediente</h3>
+              <p className="text-sm text-neutral-400 mb-8 leading-relaxed px-4">
+                ¿Estás seguro de que quieres borrar el registro del pliego? <br/>
+                <span className="text-neutral-500 font-mono text-[11px] mt-2 block italic">"{tenderToDelete.name}"</span>
+              </p>
+              
+              <div className="flex gap-3 w-full">
+                <button 
+                  onClick={() => setTenderToDelete(null)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-bold text-sm hover:bg-neutral-700 transition-colors"
+                >
+                  No, cancelar
+                </button>
+                <button 
+                  onClick={confirmDeleteTender}
+                  className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-500 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
+                >
+                  <Trash2 size={16} />
+                  Sí, borrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="relative z-10 flex-1 max-w-[1920px] mx-auto w-full px-6 py-6 grid grid-cols-12 gap-6">
         <aside className="col-span-12 xl:col-span-3 space-y-4">
           <div className="flex p-1 bg-neutral-900 rounded-xl border border-white/5">
@@ -195,7 +247,7 @@ const App: React.FC = () => {
                       <span className="text-[10px] font-bold text-neutral-500">{col.count}</span>
                     </div>
                     <div className="p-2 space-y-2 overflow-y-auto scrollbar-hide">
-                      {col.items.map(t => <TenderCard key={t.id} tender={t} onAnalyze={handleAnalyze} onOpenDetail={setSelectedTender} isAnalyzing={analyzingIds.has(t.id)} />)}
+                      {col.items.map(t => <TenderCard key={t.id} tender={t} onAnalyze={handleAnalyze} onDelete={handleDeleteTenderRequest} onOpenDetail={setSelectedTender} isAnalyzing={analyzingIds.has(t.id)} />)}
                     </div>
                   </div>
                 ))}
@@ -217,8 +269,8 @@ const App: React.FC = () => {
                  </div>
                </div>
 
-               <div className="flex-1 overflow-hidden rounded-3xl border border-white/10 bg-neutral-900/40 shadow-inner">
-                  <table className="w-full text-left border-separate border-spacing-0 table-fixed">
+               <div className="flex-1 overflow-auto rounded-3xl border border-white/10 bg-neutral-900/40 shadow-inner relative">
+                  <table className="w-full text-left border-separate border-spacing-0 table-fixed min-w-[800px]">
                     <thead className="sticky top-0 bg-neutral-900/90 backdrop-blur-md z-20">
                       <tr>
                         <th className="p-4 font-bold text-neutral-400 w-32 text-xs">Nº Expediente</th>
@@ -272,7 +324,7 @@ const App: React.FC = () => {
                                </button>
                                
                                {isStatusDropdownOpen && (
-                                 <div className="absolute top-full left-0 right-0 mt-1 bg-neutral-950 border border-white/10 rounded-xl shadow-2xl z-[100] p-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                 <div className="absolute top-full right-0 mt-1 w-52 bg-neutral-950 border border-white/10 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] z-[100] p-1 overflow-y-auto max-h-[220px] animate-in fade-in zoom-in-95 duration-200">
                                     <button 
                                       onClick={() => { setStatusFilter(''); setIsStatusDropdownOpen(false); }}
                                       className={`w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-left rounded-lg transition-colors ${statusFilter === '' ? 'bg-white/10 text-white' : 'text-neutral-400 hover:bg-white/5 hover:text-white'}`}
@@ -281,31 +333,33 @@ const App: React.FC = () => {
                                        {statusFilter === '' && <Check size={10} className="text-lime-400" />}
                                     </button>
                                     <div className="h-px bg-white/5 my-1 mx-1"></div>
-                                    {Object.entries(statusConfigs).map(([key, config]) => {
-                                       const statusKey = key as TenderStatus;
-                                       const isSelected = statusFilter === statusKey;
-                                       const Icon = config.icon;
-                                       return (
-                                         <button 
-                                           key={key}
-                                           onClick={() => { setStatusFilter(statusKey); setIsStatusDropdownOpen(false); }}
-                                           className={`w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-left rounded-lg transition-colors ${isSelected ? 'bg-white/10 text-white' : 'text-neutral-400 hover:bg-white/5 hover:text-white'}`}
-                                         >
-                                            <div className="flex items-center gap-2">
-                                               <Icon size={12} className={config.color} />
-                                               <span>{config.label}</span>
-                                            </div>
-                                            {isSelected && <Check size={10} className="text-lime-400" />}
-                                         </button>
-                                       );
-                                    })}
+                                    <div className="space-y-0.5">
+                                      {Object.entries(statusConfigs).map(([key, config]) => {
+                                         const statusKey = key as TenderStatus;
+                                         const isSelected = statusFilter === statusKey;
+                                         const Icon = config.icon;
+                                         return (
+                                           <button 
+                                             key={key}
+                                             onClick={() => { setStatusFilter(statusKey); setIsStatusDropdownOpen(false); }}
+                                             className={`w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-left rounded-lg transition-colors ${isSelected ? 'bg-white/10 text-white' : 'text-neutral-400 hover:bg-white/5 hover:text-white'}`}
+                                           >
+                                              <div className="flex items-center gap-2.5">
+                                                 <Icon size={12} className={config.color} />
+                                                 <span>{config.label}</span>
+                                              </div>
+                                              {isSelected && <Check size={10} className="text-lime-400" />}
+                                           </button>
+                                         );
+                                      })}
+                                    </div>
                                  </div>
                                )}
                             </div>
                          </td>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5 overflow-y-auto">
+                    <tbody className="divide-y divide-white/5">
                       {filteredHistoryTenders.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="py-24 text-center">

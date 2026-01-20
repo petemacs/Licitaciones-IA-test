@@ -41,6 +41,12 @@ export interface ScoringSubCriterion {
   category: 'PRICE' | 'FORMULA' | 'VALUE';
 }
 
+export interface RegistrationTask {
+  task: string;
+  description: string;
+  completed: boolean;
+}
+
 export interface AnalysisResult {
   decision: 'KEEP' | 'DISCARD' | 'REVIEW';
   summaryReasoning: string;
@@ -69,6 +75,7 @@ export interface AnalysisResult {
   };
   
   strategy: {
+    valuationCriteria: string;
     angle: string;
   };
 
@@ -79,4 +86,6 @@ export interface AnalysisResult {
     details: string;
     subCriteria: ScoringSubCriterion[];
   };
+
+  registrationChecklist: RegistrationTask[];
 }

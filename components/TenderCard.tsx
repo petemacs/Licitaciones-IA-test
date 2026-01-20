@@ -1,26 +1,36 @@
 
 import React, { useState } from 'react';
-import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, AlertCircle, Sparkles, Euro, BarChart3, ChevronDown, ChevronUp, Target, Maximize2, HelpCircle, ArrowRightCircle, Archive, XCircle, Fingerprint, CalendarDays } from 'lucide-react';
+import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, AlertCircle, Sparkles, Euro, BarChart3, ChevronDown, ChevronUp, Target, Maximize2, HelpCircle, ArrowRightCircle, Archive, XCircle, Fingerprint, CalendarDays, Trash2 } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
 
 interface Props {
   tender: TenderDocument;
   onAnalyze?: (tender: TenderDocument) => void;
+  onDelete?: (id: string) => void;
   onOpenDetail?: (tender: TenderDocument) => void;
   isAnalyzing?: boolean;
 }
 
-const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyzing }) => {
+const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail, isAnalyzing }) => {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   
   const getStatusColor = () => {
     switch (tender.status) {
-      case TenderStatus.IN_PROGRESS: return 'bg-neutral-900 border-lime-500/50 shadow-[0_0_15px_rgba(132,204,22,0.1)]'; // En tramite
-      case TenderStatus.IN_DOUBT: return 'bg-neutral-900 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'; // En duda
-      case TenderStatus.REJECTED: return 'bg-neutral-900 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]'; // Descartado
-      case TenderStatus.ARCHIVED: return 'bg-neutral-900/50 border-neutral-800 opacity-75 grayscale-[0.5]'; // Archivado
-      default: return 'bg-neutral-900 border-white/5 hover:border-white/10'; // Pendiente
+      case TenderStatus.IN_PROGRESS: return 'bg-neutral-900 border-lime-500/50 shadow-[0_0_15px_rgba(132,204,22,0.1)]'; 
+      case TenderStatus.IN_DOUBT: return 'bg-neutral-900 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'; 
+      case TenderStatus.REJECTED: return 'bg-neutral-900 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]'; 
+      case TenderStatus.ARCHIVED: return 'bg-neutral-900 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.1)]'; 
+      default: return 'bg-neutral-900 border-white/5 hover:border-white/10'; 
     }
+  };
+
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return 'Fecha no def.';
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
   };
 
   const handleDownloadFile = (file: File) => {
@@ -51,25 +61,23 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyz
     if (type === 'SUMMARY') { Icon = FileText; colorClass = "text-blue-400"; bgClass = "bg-blue-950/30"; }
 
     return (
-      <div className="flex items-center gap-3 p-2 rounded-lg border border-white/5 bg-neutral-950/30 hover:bg-neutral-800 transition-colors group">
-        <div className={`p-2 rounded-md ${bgClass} ${colorClass} border border-white/5`}>
-          <Icon size={14} />
+      <div className="flex items-center gap-2 p-1.5 rounded-lg border border-white/5 bg-neutral-950/30 hover:bg-neutral-800 transition-colors group">
+        <div className={`p-1.5 rounded-md ${bgClass} ${colorClass} border border-white/5`}>
+          <Icon size={12} />
         </div>
         
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-0.5">{label}</p>
-          <p className="text-xs font-medium text-neutral-300 truncate font-mono" title={file ? file.name : url}>
-            {file ? file.name : "Enlace Externo"}
+          <p className="text-[10px] font-medium text-neutral-300 truncate font-mono">
+            {file ? file.name : "Enlace"}
           </p>
         </div>
 
         {file ? (
           <button 
             onClick={(e) => { e.stopPropagation(); handleDownloadFile(file); }}
-            className="p-1.5 text-neutral-500 hover:text-lime-400 hover:bg-lime-950/30 rounded-md transition-colors"
-            title="Descargar"
+            className="p-1 text-neutral-500 hover:text-lime-400 rounded-md transition-colors"
           >
-            <Download size={16} />
+            <Download size={14} />
           </button>
         ) : (
           <a 
@@ -77,10 +85,9 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyz
             target="_blank" 
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="p-1.5 text-neutral-500 hover:text-lime-400 hover:bg-lime-950/30 rounded-md transition-colors"
-            title="Abrir enlace"
+            className="p-1 text-neutral-500 hover:text-lime-400 rounded-md transition-colors"
           >
-            <ExternalLink size={16} />
+            <ExternalLink size={14} />
           </a>
         )}
       </div>
@@ -93,16 +100,16 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyz
        <div className="border border-white/10 rounded-lg overflow-hidden bg-neutral-900/50">
           <button 
             onClick={(e) => { e.stopPropagation(); setExpandedSection(isExpanded ? null : id); }}
-            className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
+            className="w-full flex items-center justify-between p-2 hover:bg-white/5 transition-colors"
           >
-             <div className="flex items-center gap-2 text-xs font-bold text-neutral-300">
+             <div className="flex items-center gap-2 text-[10px] font-bold text-neutral-400">
                {icon}
                <span>{title}</span>
              </div>
-             {isExpanded ? <ChevronUp size={14} className="text-neutral-500"/> : <ChevronDown size={14} className="text-neutral-500"/>}
+             {isExpanded ? <ChevronUp size={12} className="text-neutral-500"/> : <ChevronDown size={12} className="text-neutral-500"/>}
           </button>
           {isExpanded && (
-             <div className="p-3 pt-0 border-t border-white/5 text-xs text-neutral-400 leading-relaxed space-y-2 bg-neutral-950/30">
+             <div className="p-2 pt-0 border-t border-white/5 text-[11px] text-neutral-400 leading-relaxed space-y-1 bg-neutral-950/30">
                {content}
              </div>
           )}
@@ -113,9 +120,9 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyz
   return (
     <div 
       onClick={() => onOpenDetail && onOpenDetail(tender)}
-      className={`rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 ${getStatusColor()} relative overflow-hidden group cursor-pointer`}
+      className={`rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-1 ${getStatusColor()} relative overflow-hidden group cursor-pointer`}
     >
-      {/* Decorative colored line based on status */}
+      {/* Línea decorativa lateral de estado */}
       <div className={`absolute top-0 left-0 w-1.5 h-full 
          ${tender.status === TenderStatus.IN_PROGRESS ? 'bg-lime-500' : 
            tender.status === TenderStatus.IN_DOUBT ? 'bg-amber-500' :
@@ -123,177 +130,93 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onOpenDetail, isAnalyz
            tender.status === TenderStatus.ARCHIVED ? 'bg-purple-500' :
            'bg-transparent'}`
       }></div>
-      
-      {/* Expand Icon Hint */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-         <div className="p-1.5 bg-neutral-800 rounded-full text-neutral-400 hover:text-white border border-white/5">
-            <Maximize2 size={14} />
-         </div>
-      </div>
 
-      {/* Header Info: Expedient and Date */}
-      <div className="mb-4 pl-2">
-        <div className="flex items-center justify-between mb-3">
-           <div className="flex items-center gap-1.5 px-2 py-1 bg-neutral-950 border border-white/5 rounded-md">
-              <Fingerprint size={12} className="text-neutral-500" />
-              <span className="text-[10px] text-lime-400/80 font-mono font-bold uppercase tracking-wider">
-                {tender.expedientNumber || 'SIN EXPEDIENTE'}
-              </span>
-           </div>
-           <div className="flex items-center gap-1.5 text-[10px] text-neutral-600 font-medium">
-              <CalendarDays size={12} />
-              <span>{new Date(tender.createdAt).toLocaleDateString()}</span>
-           </div>
+      {/* Cabecera reorganizada en líneas independientes */}
+      <div className="pl-2 space-y-1.5">
+        {/* LINEA 1: FECHA LÍMITE + BOTÓN BORRAR */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-semibold bg-neutral-800/40 px-2 py-1 rounded-md w-fit">
+            <CalendarDays size={12} className="text-neutral-500" />
+            <span>{formatDate(tender.deadline)}</span>
+          </div>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete?.(tender.id); }}
+            className="p-1.5 text-neutral-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+            title="Eliminar expediente"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
         
-        {/* Budget Row - Prominent and separate */}
-        <div className="mb-3">
-           {tender.budget ? (
-              <div className="inline-flex items-center gap-2 bg-emerald-950/30 border border-emerald-500/20 px-3 py-2 rounded-xl text-emerald-400 font-bold text-[15px] shadow-sm">
-                 <Euro size={16} /> 
-                 <span>{tender.budget}</span>
-              </div>
-           ) : (
-              <div className="inline-flex items-center gap-2 bg-neutral-900 border border-white/5 px-3 py-2 rounded-xl text-neutral-600 font-bold text-xs italic">
-                 <Euro size={16} className="opacity-30" /> 
-                 <span>Presupuesto no definido</span>
-              </div>
-           )}
+        {/* LINEA 2: Nº DE EXPEDIENTE */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-950 border border-white/5 rounded-md text-[11px] font-mono text-lime-400 font-bold tracking-tight w-fit">
+          <Fingerprint size={12} className="text-neutral-600" />
+          <span className="truncate max-w-[180px] uppercase">{tender.expedientNumber || 'SIN EXPEDIENTE'}</span>
         </div>
 
-        {/* Title Row - Full width, clear */}
-        <div className="min-w-0 w-full">
-           <h4 className="font-bold text-neutral-100 leading-tight text-base line-clamp-3 group-hover:text-white transition-colors">
-             {tender.name}
-           </h4>
+        {/* LINEA 3: TÍTULO DEL EXPEDIENTE */}
+        <h4 className="font-bold text-neutral-100 leading-snug text-[13px] line-clamp-2 group-hover:text-white transition-colors pt-0.5">
+          {tender.name}
+        </h4>
+
+        {/* LINEA 4: IMPORTE DEL PLIEGO */}
+        <div className="pt-1">
+          {tender.budget ? (
+            <div className="inline-flex items-center gap-1.5 text-emerald-400 font-bold text-[13px] whitespace-nowrap bg-emerald-500/5 px-2 py-1 rounded-lg border border-emerald-500/10">
+              <Euro size={12} className="shrink-0" />
+              <span>{tender.budget.includes('EUR') || tender.budget.includes('€') ? tender.budget : `${tender.budget} €`}</span>
+            </div>
+          ) : (
+            <div className="text-[10px] text-neutral-600 font-medium italic">Sin importe definido</div>
+          )}
         </div>
       </div>
 
-      {/* Document Manager Section */}
-      <div className="bg-neutral-800/20 rounded-xl p-2 space-y-1.5 mb-5 border border-white/5 pl-2">
+      {/* Gestor de documentos */}
+      <div className="mt-4 bg-neutral-800/20 rounded-xl p-1.5 space-y-1 border border-white/5 ml-2">
         {renderDocumentRow("Resumen", "SUMMARY", tender.summaryFile, "")}
         {renderDocumentRow("PCAP", "ADMIN", tender.adminFile, tender.adminUrl)}
         {renderDocumentRow("PPT", "TECH", tender.techFile, tender.techUrl)}
-
-        {!tender.adminUrl && !tender.techUrl && !tender.summaryFile && !tender.adminFile && !tender.techFile && (
-           <div className="flex items-center gap-2 text-xs text-neutral-600 italic p-2 justify-center">
-             <AlertCircle size={14} />
-             Sin documentos
-           </div>
-        )}
       </div>
 
-      {/* AI Decision / Action Area */}
-      <div className="pl-2" onClick={(e) => e.stopPropagation()}>
+      {/* Botón de acción o Resultados de IA */}
+      <div className="mt-4 ml-2" onClick={(e) => e.stopPropagation()}>
         {tender.status === TenderStatus.PENDING ? (
           <button
             onClick={() => onAnalyze && onAnalyze(tender)}
             disabled={isAnalyzing}
-            className="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/5 shadow-sm group hover:border-lime-500/30"
+            className="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50 border border-white/5 group hover:border-lime-500/30"
           >
             {isAnalyzing ? (
-              <>
-                <Loader2 size={16} className="animate-spin text-lime-400" />
-                <span className="text-neutral-300">Analizando...</span>
-              </>
+              <Loader2 size={14} className="animate-spin text-lime-400" />
             ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-lime-400 group-hover:animate-pulse" />
-                <span>Analizar Viabilidad</span>
-              </>
+              <Sparkles className="w-3.5 h-3.5 text-lime-400" />
             )}
+            <span>{isAnalyzing ? "Analizando..." : "Analizar Viabilidad"}</span>
           </button>
         ) : (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* Decision Badge */}
-            <div className="flex items-center justify-between">
-               {tender.status === TenderStatus.IN_PROGRESS ? (
-                 <span className="flex items-center gap-2 text-xs font-bold text-lime-400 bg-lime-400/10 px-3 py-1.5 rounded-full border border-lime-400/20">
-                    <ArrowRightCircle size={14} /> EN TRAMITE
-                 </span>
-               ) : tender.status === TenderStatus.IN_DOUBT ? (
-                 <span className="flex items-center gap-2 text-xs font-bold text-amber-400 bg-amber-400/10 px-3 py-1.5 rounded-full border border-amber-400/20">
-                    <HelpCircle size={14} /> EN DUDA
-                 </span>
-               ) : tender.status === TenderStatus.REJECTED ? (
-                <span className="flex items-center gap-2 text-xs font-bold text-red-400 bg-red-400/10 px-3 py-1.5 rounded-full border border-red-400/20">
-                    <XCircle size={14} /> DESCARTADO
-                 </span>
-               ) : tender.status === TenderStatus.ARCHIVED ? (
-                <span className="flex items-center gap-2 text-xs font-bold text-purple-400 bg-purple-400/10 px-3 py-1.5 rounded-full border border-purple-400/20">
-                    <Archive size={14} /> ARCHIVADO
-                 </span>
-               ) : null}
-            </div>
-            
+          <div className="space-y-3">
             {tender.aiAnalysis && (
-              <div className="space-y-3">
-                 {/* Summary Header */}
-                 <div className="text-xs text-neutral-300 italic px-1 border-l-2 border-white/20 pl-3">
+              <div className="space-y-2">
+                 <div className="text-[10px] text-neutral-400 italic px-1 border-l-2 border-white/20 pl-2 line-clamp-2">
                     "{tender.aiAnalysis.summaryReasoning}"
                  </div>
 
-                 {/* SCORING BREAKDOWN VISUALIZATION */}
+                 {/* Barra de puntuación mini */}
                  {tender.aiAnalysis.scoring && (
-                    <div className="bg-neutral-950/50 rounded-lg p-3 border border-white/10">
-                       <div className="flex items-center justify-between text-[10px] text-neutral-500 uppercase font-bold mb-2">
-                          <span>Desglose Puntuación</span>
-                          <BarChart3 size={12}/>
-                       </div>
-                       
-                       <div className="h-3 w-full bg-neutral-800 rounded-full overflow-hidden flex mb-3">
-                          <div style={{ width: `${tender.aiAnalysis.scoring.priceWeight}%` }} className="h-full bg-emerald-500" title={`Precio: ${tender.aiAnalysis.scoring.priceWeight}%`}></div>
-                          <div style={{ width: `${tender.aiAnalysis.scoring.formulaWeight}%` }} className="h-full bg-blue-500" title={`Fórmula: ${tender.aiAnalysis.scoring.formulaWeight}%`}></div>
-                          <div style={{ width: `${tender.aiAnalysis.scoring.valueWeight}%` }} className="h-full bg-purple-500" title={`Juicio Valor: ${tender.aiAnalysis.scoring.valueWeight}%`}></div>
-                       </div>
-                       
-                       {/* DETAILED LIST OF SUB-CRITERIA */}
-                       {tender.aiAnalysis.scoring.subCriteria && tender.aiAnalysis.scoring.subCriteria.length > 0 && (
-                          <div className="space-y-1.5 mt-2 pt-2 border-t border-white/5">
-                             {tender.aiAnalysis.scoring.subCriteria.map((sub, idx) => {
-                                let dotColor = "bg-neutral-500";
-                                if (sub.category === 'PRICE') dotColor = "bg-emerald-500";
-                                if (sub.category === 'FORMULA') dotColor = "bg-blue-500";
-                                if (sub.category === 'VALUE') dotColor = "bg-purple-500";
-                                
-                                return (
-                                  <div key={idx} className="flex items-center justify-between text-[10px]">
-                                     <div className="flex items-center gap-1.5 text-neutral-400 truncate max-w-[70%]">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`}></div>
-                                        <span className="truncate">{sub.label}</span>
-                                     </div>
-                                     <span className="font-mono font-bold text-neutral-300">{sub.weight}%</span>
-                                  </div>
-                                );
-                             })}
-                          </div>
-                       )}
+                    <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden flex">
+                       <div style={{ width: `${tender.aiAnalysis.scoring.priceWeight}%` }} className="h-full bg-emerald-500"></div>
+                       <div style={{ width: `${tender.aiAnalysis.scoring.formulaWeight}%` }} className="h-full bg-blue-500"></div>
+                       <div style={{ width: `${tender.aiAnalysis.scoring.valueWeight}%` }} className="h-full bg-purple-500"></div>
                     </div>
                  )}
                  
-                 {/* COLLAPSED REPORT SECTIONS */}
                  <div className="space-y-1">
-                    {renderReportSection("Económico", <Euro size={12} className="text-emerald-400"/>, (
-                       <div className="grid grid-cols-1 gap-2">
-                          <p><span className="text-neutral-500">Modelo:</span> {tender.aiAnalysis.economic.model}</p>
-                          <p><span className="text-neutral-500">Base:</span> {tender.aiAnalysis.economic.basis}</p>
-                       </div>
+                    {renderReportSection("Análisis IA", <Sparkles size={10} className="text-lime-400"/>, (
+                       <p>{tender.aiAnalysis.economic.model}</p>
                     ), "eco")}
-                    
-                    {renderReportSection("Alcance", <Target size={12} className="text-blue-400"/>, (
-                       <div>
-                          <p className="mb-2 line-clamp-3">{tender.aiAnalysis.scope.objective}</p>
-                       </div>
-                    ), "scope")}
                  </div>
-                 
-                 <button 
-                   onClick={() => onOpenDetail && onOpenDetail(tender)}
-                   className="w-full text-center text-xs text-neutral-500 hover:text-white mt-2 pt-2 border-t border-white/5 transition-colors"
-                 >
-                   Ver informe completo
-                 </button>
-
               </div>
             )}
           </div>
