@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, Sparkles, Euro, ChevronDown, ChevronUp, Clock, CalendarDays, Trash2, Fingerprint } from 'lucide-react';
+import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, Sparkles, Euro, ChevronDown, ChevronUp, CalendarDays, Trash2, Fingerprint } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
 
 interface Props {
