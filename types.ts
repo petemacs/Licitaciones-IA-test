@@ -10,21 +10,22 @@ export enum TenderStatus {
 export interface TenderDocument {
   id: string;
   name: string;
-  summaryFile: File | null;
+  
+  summaryUrl?: string; // URL en Supabase Storage
+  summaryFile?: File | null; // Archivo local temporal
   
   tenderPageUrl?: string;
 
-  adminUrl: string;
-  adminFile: File | null;
+  adminUrl: string; // Puede ser link externo o Supabase Storage
+  adminFile?: File | null; // Archivo local temporal
   
-  techUrl: string;
-  techFile: File | null;
+  techUrl: string; // Puede ser link externo o Supabase Storage
+  techFile?: File | null; // Archivo local temporal
   
-  // New fields for extraction
   budget?: string;
   scoringSystem?: string;
-  expedientNumber?: string; // Nº de Expediente
-  deadline?: string;        // Fecha límite de entrega
+  expedientNumber?: string;
+  deadline?: string;
   
   status: TenderStatus;
   aiAnalysis?: AnalysisResult; 
