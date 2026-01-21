@@ -10,16 +10,12 @@ if (typeof window !== 'undefined' && 'Worker' in window) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 }
 
-// Fixed initialization using named parameter as per guidelines
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("API Key no configurada.");
   return new GoogleGenAI({ apiKey });
 };
 
-/**
- * Descarga un archivo desde una URL pública (Supabase o Web) para procesarlo localmente.
- */
 export const fetchFileFromUrl = async (url: string): Promise<File | null> => {
   try {
     const response = await fetch(url);
@@ -57,7 +53,6 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
   const ai = getAiClient();
   const parts: any[] = [{ text: `Expediente: ${tender.name}\nNº: ${tender.expedientNumber}\nPresupuesto: ${tender.budget}` }];
   
-  // 1. Resolver archivos (prioridad: File local > URL Supabase)
   const filesToProcess: File[] = [];
   
   if (tender.summaryFile) filesToProcess.push(tender.summaryFile);
@@ -78,13 +73,11 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
     if (f) filesToProcess.push(f);
   }
 
-  // 2. Convertir archivos a partes de Gemini
   for (const file of filesToProcess) {
     const part = await fileToPart(file);
     if (part) parts.push(part);
   }
 
-  // Removed deprecated Schema type; following guideline examples for responseSchema
   const responseSchema = {
     type: Type.OBJECT,
     properties: {
@@ -111,11 +104,9 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
     },
   });
 
-  // Correctly access .text property from GenerateContentResponse
   return JSON.parse(response.text || "{}");
 };
 
-// Added export to fix the error in BusinessRulesEditor
 export const buildAnalysisSystemPrompt = (rules: string) => `
 Actúa como un Bid Manager Senior. Analiza los pliegos adjuntos basándote en estas REGLAS DE NEGOCIO: ${rules}. 
 Tu objetivo es decidir Go/No-Go. Redacta todo en IDIOMA ESPAÑOL.
@@ -123,7 +114,6 @@ Extrae detalles económicos, alcance, recursos necesarios, requisitos de solvenc
 Responde estrictamente en JSON.
 `;
 
-// Mantener funciones auxiliares para el formulario
 export const classifyFile = (file: File, url: string = ""): 'ADMIN' | 'TECH' | 'UNKNOWN' => {
   const combinedText = (file.name + " " + url).toLowerCase();
   if (combinedText.includes('pcap') || combinedText.includes('admin') || combinedText.includes('clausula')) return 'ADMIN';
@@ -141,7 +131,6 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<any> =>
     contents: { parts: [filePart!, { text: prompt }] },
     config: { responseMimeType: "application/json" }
   });
-  // Correctly access .text property from GenerateContentResponse
   return JSON.parse(response.text || "{}");
 };
 
@@ -161,5 +150,5 @@ export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
   } catch (e) { return []; }
 };
 
-export const scrapeDocsFromWeb = async (pageUrl: string): Promise<any> => ({ candidates: [] }); // Simplificado para este cambio
-export const probeLinksInBatches = async (links: string[]): Promise<any> => ({}); // Simplificado
+export const scrapeDocsFromWeb = async (_pageUrl: string): Promise<any> => ({ candidates: [] });
+export const probeLinksInBatches = async (_links: string[]): Promise<any> => ({});

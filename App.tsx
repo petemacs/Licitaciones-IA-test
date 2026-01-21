@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layout, Search, Loader2, Archive, Grid, ArrowUpDown, Calendar, Inbox, Clock, ArrowRightCircle, HelpCircle, XCircle, Filter, ChevronDown, Check, ShieldAlert, Trash2 } from 'lucide-react';
+import { Layout, Loader2, Archive, Grid, ArrowUpDown, Clock, ArrowRightCircle, HelpCircle, XCircle, ChevronDown, ShieldAlert, Trash2 } from 'lucide-react';
 import NewTenderForm from './components/NewTenderForm';
 import BusinessRulesEditor from './components/BusinessRulesEditor';
 import TenderCard from './components/TenderCard';
@@ -48,7 +48,6 @@ const App: React.FC = () => {
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Inicialización: Cargar desde Supabase
   useEffect(() => {
     const init = async () => {
       try {
@@ -75,7 +74,6 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Guardar reglas cuando cambian
   useEffect(() => {
     if (isLoaded) saveRulesToStorage(rules);
   }, [rules, isLoaded]);
@@ -83,7 +81,6 @@ const App: React.FC = () => {
   const handleAddTender = async (newTender: TenderDocument) => {
     setIsSaving(true);
     try {
-      // 1. Subir archivos a Storage
       let adminUrl = newTender.adminUrl;
       let techUrl = newTender.techUrl;
       let summaryUrl = newTender.summaryUrl;
@@ -99,11 +96,7 @@ const App: React.FC = () => {
       }
 
       const tenderToSave = { ...newTender, adminUrl, techUrl, summaryUrl };
-      
-      // 2. Guardar en DB
       await saveTenderToSupabase(tenderToSave);
-      
-      // 3. Actualizar UI
       setTenders(prev => [tenderToSave, ...prev]);
     } catch (err) {
       setError("Error al guardar el pliego en la nube.");

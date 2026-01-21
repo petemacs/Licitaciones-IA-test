@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
-import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, AlertCircle, Sparkles, Euro, BarChart3, ChevronDown, ChevronUp, Target, Maximize2, HelpCircle, ArrowRightCircle, Archive, XCircle, Fingerprint, CalendarDays, Trash2 } from 'lucide-react';
+import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, Sparkles, Euro, ChevronDown, ChevronUp, Clock, CalendarDays, Trash2, Fingerprint } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
 
 interface Props {
   tender: TenderDocument;
   onAnalyze?: (tender: TenderDocument) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (tender: TenderDocument) => void;
   onOpenDetail?: (tender: TenderDocument) => void;
   isAnalyzing?: boolean;
 }
@@ -45,7 +45,6 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
   };
 
   const renderDocumentRow = (
-    label: string, 
     type: 'SUMMARY' | 'ADMIN' | 'TECH',
     file: File | null, 
     url: string
@@ -122,7 +121,6 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
       onClick={() => onOpenDetail && onOpenDetail(tender)}
       className={`rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-1 ${getStatusColor()} relative overflow-hidden group cursor-pointer`}
     >
-      {/* Línea decorativa lateral de estado */}
       <div className={`absolute top-0 left-0 w-1.5 h-full 
          ${tender.status === TenderStatus.IN_PROGRESS ? 'bg-lime-500' : 
            tender.status === TenderStatus.IN_DOUBT ? 'bg-amber-500' :
@@ -131,9 +129,7 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
            'bg-transparent'}`
       }></div>
 
-      {/* Cabecera reorganizada en líneas independientes */}
       <div className="pl-2 space-y-1.5">
-        {/* LINEA 1: FECHA LÍMITE + BOTÓN BORRAR */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-semibold bg-neutral-800/40 px-2 py-1 rounded-md w-fit">
             <CalendarDays size={12} className="text-neutral-500" />
@@ -141,7 +137,7 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
           </div>
           
           <button 
-            onClick={(e) => { e.stopPropagation(); onDelete?.(tender.id); }}
+            onClick={(e) => { e.stopPropagation(); onDelete?.(tender); }}
             className="p-1.5 text-neutral-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
             title="Eliminar expediente"
           >
@@ -149,18 +145,15 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
           </button>
         </div>
         
-        {/* LINEA 2: Nº DE EXPEDIENTE */}
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-950 border border-white/5 rounded-md text-[11px] font-mono text-lime-400 font-bold tracking-tight w-fit">
           <Fingerprint size={12} className="text-neutral-600" />
           <span className="truncate max-w-[180px] uppercase">{tender.expedientNumber || 'SIN EXPEDIENTE'}</span>
         </div>
 
-        {/* LINEA 3: TÍTULO DEL EXPEDIENTE */}
         <h4 className="font-bold text-neutral-100 leading-snug text-[13px] line-clamp-2 group-hover:text-white transition-colors pt-0.5">
           {tender.name}
         </h4>
 
-        {/* LINEA 4: IMPORTE DEL PLIEGO */}
         <div className="pt-1">
           {tender.budget ? (
             <div className="inline-flex items-center gap-1.5 text-emerald-400 font-bold text-[13px] whitespace-nowrap bg-emerald-500/5 px-2 py-1 rounded-lg border border-emerald-500/10">
@@ -173,14 +166,12 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
         </div>
       </div>
 
-      {/* Gestor de documentos */}
       <div className="mt-4 bg-neutral-800/20 rounded-xl p-1.5 space-y-1 border border-white/5 ml-2">
-        {renderDocumentRow("Resumen", "SUMMARY", tender.summaryFile, "")}
-        {renderDocumentRow("PCAP", "ADMIN", tender.adminFile, tender.adminUrl)}
-        {renderDocumentRow("PPT", "TECH", tender.techFile, tender.techUrl)}
+        {renderDocumentRow("SUMMARY", tender.summaryFile || null, "")}
+        {renderDocumentRow("ADMIN", tender.adminFile || null, tender.adminUrl || "")}
+        {renderDocumentRow("TECH", tender.techFile || null, tender.techUrl || "")}
       </div>
 
-      {/* Botón de acción o Resultados de IA */}
       <div className="mt-4 ml-2" onClick={(e) => e.stopPropagation()}>
         {tender.status === TenderStatus.PENDING ? (
           <button
@@ -203,7 +194,6 @@ const TenderCard: React.FC<Props> = ({ tender, onAnalyze, onDelete, onOpenDetail
                     "{tender.aiAnalysis.summaryReasoning}"
                  </div>
 
-                 {/* Barra de puntuación mini */}
                  {tender.aiAnalysis.scoring && (
                     <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden flex">
                        <div style={{ width: `${tender.aiAnalysis.scoring.priceWeight}%` }} className="h-full bg-emerald-500"></div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Calendar, Euro, FileText, BarChart3, Download, ExternalLink, FileSpreadsheet, FileCode, File, Sparkles, ChevronDown, Archive, XCircle, HelpCircle, ArrowRightCircle, Clock, Target, Users, ShieldAlert, Lightbulb } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
@@ -122,7 +123,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-4xl h-full bg-neutral-950 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
         
-        {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-white/5 bg-neutral-900/50">
           <div className="flex-1 pr-8">
              <div className="flex items-center gap-4 mb-4">
@@ -144,20 +144,17 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-8">
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              
-              {/* Left Column: Docs & Quick Info */}
               <div className="space-y-6">
                  <div>
                     <h3 className="text-xs font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                        <FileText size={16} className="text-lime-400"/> DOCUMENTACIÓN
                     </h3>
                     <div className="space-y-3">
-                       <DocItem label="Resumen" type="SUMMARY" file={tender.summaryFile} url="" />
-                       <DocItem label="PCAP" type="ADMIN" file={tender.adminFile} url={tender.adminUrl} />
-                       <DocItem label="PPT" type="TECH" file={tender.techFile} url={tender.techUrl} />
+                       <DocItem label="Resumen" type="SUMMARY" file={tender.summaryFile || null} url="" />
+                       <DocItem label="PCAP" type="ADMIN" file={tender.adminFile || null} url={tender.adminUrl || ""} />
+                       <DocItem label="PPT" type="TECH" file={tender.techFile || null} url={tender.techUrl || ""} />
                     </div>
                  </div>
 
@@ -167,14 +164,12 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                          <BarChart3 size={16} className="text-purple-400"/> PUNTUACIÓN
                       </h3>
                       
-                      {/* Progress Bar */}
                       <div className="h-4 w-full bg-neutral-800 rounded-full overflow-hidden flex mb-4">
                           <div style={{ width: `${analysis.scoring.priceWeight}%` }} className="h-full bg-emerald-500"></div>
                           <div style={{ width: `${analysis.scoring.formulaWeight}%` }} className="h-full bg-blue-500"></div>
                           <div style={{ width: `${analysis.scoring.valueWeight}%` }} className="h-full bg-purple-500"></div>
                        </div>
 
-                       {/* Detailed Breakdown List */}
                        <div className="space-y-3">
                           {analysis.scoring.subCriteria && analysis.scoring.subCriteria.map((sub, idx) => {
                              let color = "text-neutral-400";
@@ -200,7 +195,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                  )}
               </div>
 
-              {/* Right Column: Full Report */}
               <div className="md:col-span-2 space-y-8">
                  {!analysis ? (
                     <div className="h-full flex flex-col items-center justify-center text-neutral-600 border-2 border-dashed border-neutral-800 rounded-3xl p-10 text-center">
@@ -209,7 +203,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                     </div>
                  ) : (
                     <>
-                       {/* Section: Economic */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
                              <Euro className="text-emerald-400" /> 1. Análisis Económico
@@ -226,7 +219,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                           </div>
                        </section>
 
-                       {/* Section: Scope */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
                              <Target className="text-blue-400" /> 2. Alcance del Servicio
@@ -245,7 +237,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                           </div>
                        </section>
 
-                       {/* Section: Resources */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
                              <Users className="text-amber-400" /> 3. Recursos y Cronograma
@@ -266,7 +257,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                           </div>
                        </section>
 
-                        {/* Section: Solvency */}
                         <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
                              <ShieldAlert className="text-red-400" /> 4. Requisitos Bloqueantes y Solvencia
@@ -289,7 +279,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                           </div>
                        </section>
                        
-                       {/* Section: Strategy */}
                        <section>
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
                              <Lightbulb className="text-yellow-400" /> 5. Enfoque Estratégico Sugerido
@@ -305,7 +294,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange }) 
                              </div>
                           </div>
                        </section>
-
                     </>
                  )}
               </div>

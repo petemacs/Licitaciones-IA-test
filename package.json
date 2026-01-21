@@ -1,3 +1,4 @@
+
 {
   "name": "gestor-licitaciones-ai",
   "private": true,
@@ -10,6 +11,7 @@
   },
   "dependencies": {
     "@google/genai": "*",
+    "@supabase/supabase-js": "^2.49.1",
     "idb-keyval": "^6.2.1",
     "lucide-react": "^0.344.0",
     "pdfjs-dist": "4.0.379",

@@ -1,12 +1,9 @@
 
 import { supabase } from './supabaseClient';
-import { TenderDocument, TenderStatus, BusinessRules } from '../types';
+import { TenderDocument, TenderStatus } from '../types';
 
 const BUCKET_NAME = 'tender-documents';
 
-/**
- * Sube un archivo al bucket de Supabase y devuelve la URL pública.
- */
 export const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
   try {
     const fileName = `${folder}/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
@@ -27,9 +24,6 @@ export const uploadFileToSupabase = async (file: File, folder: string): Promise<
   }
 };
 
-/**
- * Borra un archivo del bucket usando su URL pública.
- */
 export const deleteFileFromSupabase = async (url: string) => {
   try {
     const path = url.split(`${BUCKET_NAME}/`)[1];
@@ -41,9 +35,6 @@ export const deleteFileFromSupabase = async (url: string) => {
   }
 };
 
-/**
- * Carga todas las licitaciones desde la tabla 'tenders'.
- */
 export const loadTendersFromStorage = async (): Promise<TenderDocument[]> => {
   try {
     const { data, error } = await supabase
@@ -53,7 +44,7 @@ export const loadTendersFromStorage = async (): Promise<TenderDocument[]> => {
 
     if (error) throw error;
 
-    return (data || []).map(item => ({
+    return (data || []).map((item: any) => ({
       id: item.id,
       name: item.name,
       budget: item.budget,
@@ -74,9 +65,6 @@ export const loadTendersFromStorage = async (): Promise<TenderDocument[]> => {
   }
 };
 
-/**
- * Guarda o actualiza una licitación en Supabase.
- */
 export const saveTenderToSupabase = async (tender: TenderDocument) => {
   try {
     const { error } = await supabase
@@ -104,17 +92,12 @@ export const saveTenderToSupabase = async (tender: TenderDocument) => {
   }
 };
 
-/**
- * Borra una licitación y sus archivos asociados.
- */
 export const deleteTenderFromSupabase = async (tender: TenderDocument) => {
   try {
-    // 1. Borrar archivos de Storage si existen
     if (tender.summaryUrl) await deleteFileFromSupabase(tender.summaryUrl);
     if (tender.adminUrl && tender.adminUrl.includes(BUCKET_NAME)) await deleteFileFromSupabase(tender.adminUrl);
     if (tender.techUrl && tender.techUrl.includes(BUCKET_NAME)) await deleteFileFromSupabase(tender.techUrl);
 
-    // 2. Borrar registro de la DB
     const { error } = await supabase
       .from('tenders')
       .delete()
@@ -127,9 +110,6 @@ export const deleteTenderFromSupabase = async (tender: TenderDocument) => {
   }
 };
 
-/**
- * Carga las reglas de negocio globales.
- */
 export const loadRulesFromStorage = async (defaultRules: string): Promise<string> => {
   try {
     const { data, error } = await supabase
@@ -139,7 +119,7 @@ export const loadRulesFromStorage = async (defaultRules: string): Promise<string
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return defaultRules; // No hay reglas aún
+      if (error.code === 'PGRST116') return defaultRules;
       throw error;
     }
     return data.content;
@@ -148,9 +128,6 @@ export const loadRulesFromStorage = async (defaultRules: string): Promise<string
   }
 };
 
-/**
- * Guarda las reglas de negocio globales.
- */
 export const saveRulesToStorage = async (content: string) => {
   try {
     await supabase

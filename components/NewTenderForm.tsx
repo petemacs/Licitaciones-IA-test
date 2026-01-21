@@ -12,7 +12,6 @@ interface Props {
 const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
   const [isOpen, setIsOpen] = useState(false);
   
-  // Form State
   const [name, setName] = useState('');
   const [budget, setBudget] = useState('');
   const [scoringSystem, setScoringSystem] = useState('');
@@ -23,12 +22,10 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
   const [techFile, setTechFile] = useState<File | null>(null);
   const [summaryFile, setSummaryFile] = useState<File | null>(null);
 
-  // UI State
   const [isExtracting, setIsExtracting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [duplicateError, setDuplicateError] = useState(false);
   
-  // Drag State
   const [dragActive, setDragActive] = useState<{summary: boolean, admin: boolean, tech: boolean}>({
     summary: false, admin: false, tech: false
   });
@@ -41,7 +38,6 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
 
     if (!name) return;
 
-    // Validación de duplicados
     const normalizedNewExpedient = (expedientNumber || '').trim().toLowerCase();
     const normalizedNewName = (name || '').trim().toLowerCase();
 
@@ -64,9 +60,9 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
       expedientNumber,
       deadline,
       tenderPageUrl,
-      adminUrl: "", // URL set by file or web scrape
+      adminUrl: "",
       adminFile,
-      techUrl: "", // URL set by file or web scrape
+      techUrl: "",
       techFile,
       summaryFile,
       status: TenderStatus.PENDING,
@@ -101,7 +97,7 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
       addLog("> Buscando documentos en la web...");
       const scrapeResult = await scrapeDocsFromWeb(tenderPageUrl);
       
-      let candidates = scrapeResult.candidates || [];
+      let candidates: string[] = scrapeResult.candidates || [];
       if (scrapeResult.adminUrl) candidates.push(scrapeResult.adminUrl);
       if (scrapeResult.techUrl) candidates.push(scrapeResult.techUrl);
       
@@ -142,8 +138,8 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
         const [data, internalLinks] = await Promise.all([metadataPromise, linksPromise]);
         
         let allCandidates = new Set<string>();
-        internalLinks.forEach(l => allCandidates.add(l));
-        if (data.allLinks) data.allLinks.forEach(l => allCandidates.add(l));
+        internalLinks.forEach((l: string) => allCandidates.add(l));
+        if (data.allLinks) data.allLinks.forEach((l: string) => allCandidates.add(l));
         if (data.adminUrl) allCandidates.add(data.adminUrl);
         if (data.techUrl) allCandidates.add(data.techUrl);
         
@@ -161,7 +157,7 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
            setTenderPageUrl(currentUrl);
            if (allCandidates.size < 2) {
               const webDocs = await scrapeDocsFromWeb(currentUrl);
-              webDocs.candidates.forEach(c => allCandidates.add(c));
+              webDocs.candidates.forEach((c: string) => allCandidates.add(c));
            }
         }
 
