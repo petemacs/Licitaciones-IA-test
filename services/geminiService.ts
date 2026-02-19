@@ -16,64 +16,93 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const fetchFileFromUrl = async (url: string): Promise<File | null> => {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const fileName = url.split('/').pop() || 'document.pdf';
-    return new File([blob], fileName, { type: blob.type });
-  } catch (e) {
-    console.error("Error fetching file from URL:", url);
-    return null;
-  }
+export const buildAnalysisSystemPrompt = (rules: string) => {
+  return `Eres un experto senior en licitaciones públicas españolas. Tu misión es analizar la VIABILIDAD técnica y administrativa de un expediente basándote en:
+1. REGLAS DE NEGOCIO DEL USUARIO: ${rules}
+2. DOCUMENTOS ADJUNTOS: Analiza PCAP y PPT adjuntos si están presentes.
+3. BÚSQUEDA WEB: Solo si la información en los archivos es insuficiente, usa Google Search para completar datos de solvencia o criterios.
+
+Tu objetivo final es determinar si la empresa debe presentarse o no. Responde siempre en español con rigor técnico. El resultado debe ser un JSON puro.`;
 };
 
-const fileToPart = async (file: File): Promise<{ inlineData?: { data: string; mimeType: string }; text?: string } | null> => {
-  const supportedInlineTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+export const fetchFileFromUrl = async (url: string, defaultName: string): Promise<File | null> => {
+  if (!url || !url.startsWith('http')) return null;
+  
+  const getCleanName = (url: string, fallback: string) => {
+    try {
+      let n = url.split('/').pop()?.split('?')[0] || fallback;
+      if (!n.toLowerCase().endsWith('.pdf')) n += '.pdf';
+      return n;
+    } catch { return fallback; }
+  };
 
-  if (supportedInlineTypes.includes(file.type)) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve({ inlineData: { data: reader.result.split(',')[1], mimeType: file.type } });
-        } else reject(new Error("Failed base64"));
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  } else if (file.type.includes('text') || file.type.includes('json') || file.name.endsWith('.xml')) {
-    const textContent = await file.text();
-    return { text: `Archivo ${file.name}:\n${textContent.substring(0, 30000)}` };
+  const attemptFetch = async (targetUrl: string) => {
+    const response = await fetch(targetUrl);
+    if (!response.ok) throw new Error(`Status ${response.status}`);
+    const blob = await response.blob();
+    if (blob.size < 1000) throw new Error("Archivo inválido");
+    return new File([blob], getCleanName(url, defaultName), { type: 'application/pdf' });
+  };
+
+  const strategies = [
+    () => attemptFetch(url),
+    () => attemptFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
+    () => attemptFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      const file = await strategy();
+      if (file) return file;
+    } catch (e) {
+      console.warn(`Error descargando ${url}`);
+    }
   }
   return null;
 };
 
+const fileToPart = async (file: File): Promise<{ inlineData?: { data: string; mimeType: string } } | null> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve({ inlineData: { data: reader.result.split(',')[1], mimeType: file.type } });
+      } else reject(new Error("Failed base64"));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+const parseAiJson = (text: string) => {
+  try {
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("Error parseando JSON de la IA:", text);
+    throw new Error("Formato inválido.");
+  }
+};
+
 export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: string): Promise<AnalysisResult> => {
   const ai = getAiClient();
-  const parts: any[] = [{ text: `Expediente: ${tender.name}\nNº: ${tender.expedientNumber}\nPresupuesto: ${tender.budget}` }];
-  
   const filesToProcess: File[] = [];
-  
-  if (tender.summaryFile) filesToProcess.push(tender.summaryFile);
-  else if (tender.summaryUrl) {
-    const f = await fetchFileFromUrl(tender.summaryUrl);
-    if (f) filesToProcess.push(f);
-  }
 
-  if (tender.adminFile) filesToProcess.push(tender.adminFile);
-  else if (tender.adminUrl && tender.adminUrl.startsWith('http')) {
-    const f = await fetchFileFromUrl(tender.adminUrl);
-    if (f) filesToProcess.push(f);
-  }
+  // Descargar archivos si están en la nube pero no en local
+  const tempAdminFile = !tender.adminFile && tender.adminUrl ? await fetchFileFromUrl(tender.adminUrl, 'PCAP_Nube.pdf') : tender.adminFile;
+  const tempTechFile = !tender.techFile && tender.techUrl ? await fetchFileFromUrl(tender.techUrl, 'PPT_Nube.pdf') : tender.techFile;
+  const tempSummaryFile = !tender.summaryFile && tender.summaryUrl ? await fetchFileFromUrl(tender.summaryUrl, 'Resumen_Nube.pdf') : tender.summaryFile;
 
-  if (tender.techFile) filesToProcess.push(tender.techFile);
-  else if (tender.techUrl && tender.techUrl.startsWith('http')) {
-    const f = await fetchFileFromUrl(tender.techUrl);
-    if (f) filesToProcess.push(f);
-  }
+  if (tempSummaryFile) filesToProcess.push(tempSummaryFile);
+  if (tempAdminFile) filesToProcess.push(tempAdminFile);
+  if (tempTechFile) filesToProcess.push(tempTechFile);
 
-  for (const file of filesToProcess) {
+  const parts: any[] = [];
+  let contextText = `ANALIZA: ${tender.name} (${tender.expedientNumber || 'N/A'})\nREGLAS: ${rules}`;
+
+  parts.push({ text: contextText });
+
+  for (const file of filesToProcess.slice(0, 3)) {
     const part = await fileToPart(file);
     if (part) parts.push(part);
   }
@@ -81,57 +110,54 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
   const responseSchema = {
     type: Type.OBJECT,
     properties: {
-      decision: { type: Type.STRING, enum: ["KEEP", "DISCARD", "REVIEW"] },
+      decision: { type: Type.STRING, description: "KEEP, DISCARD, or REVIEW" },
       summaryReasoning: { type: Type.STRING },
       economic: { type: Type.OBJECT, properties: { budget: { type: Type.STRING }, model: { type: Type.STRING }, basis: { type: Type.STRING } } },
       scope: { type: Type.OBJECT, properties: { objective: { type: Type.STRING }, deliverables: { type: Type.ARRAY, items: { type: Type.STRING } } } },
       resources: { type: Type.OBJECT, properties: { duration: { type: Type.STRING }, team: { type: Type.STRING }, dedication: { type: Type.STRING } } },
       solvency: { type: Type.OBJECT, properties: { certifications: { type: Type.STRING }, specificSolvency: { type: Type.STRING }, penalties: { type: Type.STRING } } },
       strategy: { type: Type.OBJECT, properties: { valuationCriteria: { type: Type.STRING }, angle: { type: Type.STRING } } },
-      scoring: { type: Type.OBJECT, properties: { priceWeight: { type: Type.NUMBER }, formulaWeight: { type: Type.NUMBER }, valueWeight: { type: Type.NUMBER }, details: { type: Type.STRING }, subCriteria: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, weight: { type: Type.NUMBER }, category: { type: Type.STRING, enum: ["PRICE", "FORMULA", "VALUE"] } } } } } },
+      scoring: { type: Type.OBJECT, properties: { priceWeight: { type: Type.NUMBER }, formulaWeight: { type: Type.NUMBER }, valueWeight: { type: Type.NUMBER }, details: { type: Type.STRING }, subCriteria: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, weight: { type: Type.NUMBER }, category: { type: Type.STRING } } } } } },
       registrationChecklist: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { task: { type: Type.STRING }, description: { type: Type.STRING }, completed: { type: Type.BOOLEAN } } } }
     },
     required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring", "registrationChecklist"],
   };
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: 'gemini-3-flash-preview',
     contents: { parts },
     config: { 
       systemInstruction: buildAnalysisSystemPrompt(rules), 
       responseMimeType: "application/json", 
       responseSchema: responseSchema,
+      tools: [{ googleSearch: {} }] 
     },
   });
 
-  return JSON.parse(response.text || "{}");
-};
+  const result = parseAiJson(response.text || "{}");
+  
+  if (tempAdminFile) tender.adminFile = tempAdminFile;
+  if (tempTechFile) tender.techFile = tempTechFile;
+  if (tempSummaryFile) tender.summaryFile = tempSummaryFile;
 
-export const buildAnalysisSystemPrompt = (rules: string) => `
-Actúa como un Bid Manager Senior. Analiza los pliegos adjuntos basándote en estas REGLAS DE NEGOCIO: ${rules}. 
-Tu objetivo es decidir Go/No-Go. Redacta todo en IDIOMA ESPAÑOL.
-Extrae detalles económicos, alcance, recursos necesarios, requisitos de solvencia y el modelo de puntuación detallado.
-Responde estrictamente en JSON.
-`;
-
-export const classifyFile = (file: File, url: string = ""): 'ADMIN' | 'TECH' | 'UNKNOWN' => {
-  const combinedText = (file.name + " " + url).toLowerCase();
-  if (combinedText.includes('pcap') || combinedText.includes('admin') || combinedText.includes('clausula')) return 'ADMIN';
-  if (combinedText.includes('ppt') || combinedText.includes('tecnic') || combinedText.includes('memoria')) return 'TECH';
-  return 'UNKNOWN';
+  return result;
 };
 
 export const extractMetadataFromTenderFile = async (file: File): Promise<any> => {
   const ai = getAiClient();
   const filePart = await fileToPart(file);
-  const prompt = `Analiza este documento y extrae: name, budget, scoringSystem, expedientNumber, deadline (YYYY-MM-DD), tenderPageUrl, adminUrl, techUrl. Idioma: Español. Responde JSON.`;
-  
+  const prompt = `Extrae metadatos.`;
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: { name: { type: Type.STRING }, budget: { type: Type.STRING }, expedientNumber: { type: Type.STRING }, deadline: { type: Type.STRING }, tenderPageUrl: { type: Type.STRING }, scoringSystem: { type: Type.STRING } },
+    required: ["name", "budget", "expedientNumber", "deadline", "scoringSystem"]
+  };
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: { parts: [filePart!, { text: prompt }] },
-    config: { responseMimeType: "application/json" }
+    config: { responseMimeType: "application/json", responseSchema: responseSchema }
   });
-  return JSON.parse(response.text || "{}");
+  return parseAiJson(response.text || "{}");
 };
 
 export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
@@ -141,14 +167,43 @@ export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
     const pdfjs = pdfjsLib.getDocument ? pdfjsLib : pdfjsLib.default;
     const pdfDoc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
     const links: Set<string> = new Set();
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
+    for (let i = 1; i <= Math.min(pdfDoc.numPages, 10); i++) {
       const page = await pdfDoc.getPage(i);
       const annotations = await page.getAnnotations();
-      for (const ant of annotations) if (ant.subtype === 'Link' && ant.url) links.add(ant.url);
+      for (const ant of annotations) {
+        if (ant.subtype === 'Link' && ant.url) {
+           const url = ant.url.toLowerCase();
+           if (url.includes('.pdf') || url.includes('contrataciondelestado')) links.add(ant.url);
+        }
+      }
     }
     return Array.from(links);
   } catch (e) { return []; }
 };
 
-export const scrapeDocsFromWeb = async (_pageUrl: string): Promise<any> => ({ candidates: [] });
-export const probeLinksInBatches = async (_links: string[]): Promise<any> => ({});
+export const probeLinksInBatches = async (links: string[]): Promise<any> => {
+  if (links.length === 0) return {};
+  const ai = getAiClient();
+  const prompt = `Identifica PCAP y PPT: ${links.join(', ')}`;
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: { adminUrl: { type: Type.STRING }, techUrl: { type: Type.STRING } },
+    required: ["adminUrl", "techUrl"]
+  };
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: { responseMimeType: "application/json", responseSchema: responseSchema },
+  });
+  return parseAiJson(response.text || "{}");
+};
+
+export const scrapeDocsFromWeb = async (pageUrl: string): Promise<any> => {
+  const ai = getAiClient();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Busca PCAP y PPT en: ${pageUrl}.`,
+    config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" },
+  });
+  return parseAiJson(response.text || "{}");
+};
