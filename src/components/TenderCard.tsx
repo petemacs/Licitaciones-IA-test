@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, Sparkles, Euro, CalendarDays, Trash2, Fingerprint, ShieldAlert, AlertTriangle } from 'lucide-react';
+import React from 'react';
+import { FileText, ExternalLink, Loader2, File, FileCode, FileSpreadsheet, Download, Sparkles, Euro, CalendarDays, Trash2, Fingerprint, AlertTriangle } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
 
 interface Props {

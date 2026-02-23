@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Calendar, Euro, FileText, BarChart3, Download, ExternalLink, FileSpreadsheet, FileCode, File, Sparkles, ChevronDown, Archive, XCircle, HelpCircle, ArrowRightCircle, Clock, Target, Users, ShieldAlert, Lightbulb, Eye, Upload, AlertCircle, Loader2, CheckCircle2, Circle, ListChecks, Flag } from 'lucide-react';
-import { TenderDocument, TenderStatus, RegistrationTask } from '../types';
+import { X, Calendar, Euro, FileText, BarChart3, Download, FileSpreadsheet, FileCode, File, Sparkles, ChevronDown, Archive, XCircle, HelpCircle, ArrowRightCircle, Clock, Target, ShieldAlert, Lightbulb, Eye, Upload, Loader2 } from 'lucide-react';
+import { TenderDocument, TenderStatus } from '../types';
 
 interface Props {
   tender: TenderDocument;
@@ -14,7 +14,6 @@ interface Props {
 
 const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, onUpdateTender, onAnalyze, isAnalyzing }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'ANALYSIS' | 'WORKFLOW'>('ANALYSIS');
   const statusRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFileType, setPendingFileType] = useState<'ADMIN' | 'TECH' | 'SUMMARY' | null>(null);
@@ -46,15 +45,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
     }
   };
 
-  const handleViewFile = (file: File | null, url: string) => {
-    if (file) {
-      const blobUrl = URL.createObjectURL(file);
-      window.open(blobUrl, '_blank');
-    } else if (url && url.startsWith('http')) {
-      window.open(url, '_blank');
-    }
-  };
-
   const handleManualUpload = (type: 'ADMIN' | 'TECH' | 'SUMMARY') => {
     setPendingFileType(type);
     setTimeout(() => fileInputRef.current?.click(), 0);
@@ -73,25 +63,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
     if (e.target) e.target.value = '';
   };
 
-  const toggleTask = (index: number) => {
-    if (!analysis || !onUpdateTender) return;
-    const newTasks = [...analysis.registrationChecklist];
-    newTasks[index] = { ...newTasks[index], completed: !newTasks[index].completed };
-    
-    const updatedTender = {
-      ...tender,
-      aiAnalysis: {
-        ...analysis,
-        registrationChecklist: newTasks
-      }
-    };
-    onUpdateTender(updatedTender);
-  };
-
-  const completedTasks = analysis?.registrationChecklist.filter(t => t.completed).length || 0;
-  const totalTasks = analysis?.registrationChecklist.length || 0;
-  const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
   const DocItem = ({ label, file, url, type }: { label: string, file: File | null, url: string, type: 'ADMIN' | 'TECH' | 'SUMMARY' }) => {
     let Icon = File;
     let color = "text-neutral-400";
@@ -105,6 +76,22 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
     const hasUrl = !!url && url.startsWith('http');
     const displayText = hasFile ? file.name : (hasUrl ? "PDF en Nube" : "Pendiente");
 
+    const handleOpen = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (file) {
+        console.log(`Abriendo archivo local: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size}`);
+        const blobUrl = URL.createObjectURL(file);
+        window.open(blobUrl, '_blank');
+        // Nota: No revocamos inmediatamente para permitir que se abra
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000); 
+      } else if (url) {
+        console.log(`Abriendo URL remota: ${url}`);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        alert("No hay documento disponible para visualizar.");
+      }
+    };
+
     return (
       <div className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${hasFile || hasUrl ? 'bg-neutral-900 border-white/5 shadow-sm' : 'bg-neutral-900/40 border-dashed border-white/5 opacity-60'}`}>
          <div className="flex items-center gap-3 min-w-0">
@@ -113,7 +100,7 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
             </div>
             <div className="min-w-0">
                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider">{label}</p>
-               <p className={`text-sm font-medium truncate ${(hasFile || hasUrl) ? 'text-neutral-200' : 'text-neutral-500'}`}>
+               <p className={`text-sm font-medium truncate ${(hasFile || hasUrl) ? 'text-neutral-200' : 'text-neutral-500'}`} title={displayText}>
                  {displayText}
                </p>
             </div>
@@ -121,11 +108,11 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
          <div className="flex items-center gap-1">
              {(hasFile || hasUrl) ? (
                <>
-                 <button onClick={() => handleViewFile(file, url)} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors"><Eye size={18} /></button>
-                 <button onClick={() => handleDownloadFile(file, url)} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-lime-400 transition-colors"><Download size={18} /></button>
+                 <button onClick={handleOpen} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors" title="Ver documento"><Eye size={18} /></button>
+                 <button onClick={() => handleDownloadFile(file, url)} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-lime-400 transition-colors" title="Descargar"><Download size={18} /></button>
                </>
              ) : (
-               <button onClick={() => handleManualUpload(type)} className="p-2 bg-lime-400/10 hover:bg-lime-400/20 rounded-lg text-lime-400 transition-all border border-lime-400/20"><Upload size={18} /></button>
+               <button onClick={() => handleManualUpload(type)} className="p-2 bg-lime-400/10 hover:bg-lime-400/20 rounded-lg text-lime-400 transition-all border border-lime-400/20" title="Subir documento"><Upload size={18} /></button>
              )}
          </div>
       </div>
@@ -187,24 +174,14 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
           <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white transition-colors"><X size={24} /></button>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs removed, only Analysis view remains */}
         <div className="flex px-8 border-b border-white/5 bg-neutral-900/30">
-           <button 
-             onClick={() => setActiveTab('ANALYSIS')} 
-             className={`px-6 py-4 text-xs font-bold transition-all border-b-2 ${activeTab === 'ANALYSIS' ? 'border-lime-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-           >
+           <div className="px-6 py-4 text-xs font-bold border-b-2 border-lime-500 text-white">
              ANÁLISIS TÉCNICO
-           </button>
-           <button 
-             onClick={() => setActiveTab('WORKFLOW')} 
-             className={`px-6 py-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'WORKFLOW' ? 'border-lime-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-           >
-             PLAN DE INSCRIPCIÓN {totalTasks > 0 && <span className="bg-neutral-800 px-1.5 py-0.5 rounded text-[10px]">{completedTasks}/{totalTasks}</span>}
-           </button>
+           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8">
-           {activeTab === 'ANALYSIS' ? (
              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                <div className="space-y-6">
                   <div>
@@ -250,79 +227,6 @@ const TenderDetailView: React.FC<Props> = ({ tender, onClose, onStatusChange, on
                   )}
                </div>
              </div>
-           ) : (
-             <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Progress Card */}
-                <div className="bg-neutral-900 rounded-3xl p-8 border border-white/10 shadow-2xl relative overflow-hidden">
-                   <div className="absolute top-0 right-0 p-8 opacity-5">
-                      <ListChecks size={120} />
-                   </div>
-                   <div className="relative z-10">
-                      <div className="flex items-end justify-between mb-4">
-                         <div>
-                            <h3 className="text-2xl font-bold text-white mb-1">Tu progreso de inscripción</h3>
-                            <p className="text-sm text-neutral-500">Completa todos los pasos para presentar la oferta.</p>
-                         </div>
-                         <div className="text-right">
-                            <span className="text-3xl font-black text-lime-400">{Math.round(progressPercent)}%</span>
-                         </div>
-                      </div>
-                      <div className="h-3 w-full bg-neutral-800 rounded-full overflow-hidden border border-white/5">
-                         <div 
-                           className="h-full bg-gradient-to-r from-lime-600 to-lime-400 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(163,230,53,0.3)]" 
-                           style={{ width: `${progressPercent}%` }}
-                         ></div>
-                      </div>
-                   </div>
-                </div>
-
-                {/* Workflow Checklist */}
-                <div className="space-y-4">
-                   <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                     <Flag size={14} className="text-lime-500" /> PASOS RECOMENDADOS POR LA IA
-                   </h4>
-                   
-                   {!analysis || analysis.registrationChecklist.length === 0 ? (
-                      <div className="p-12 text-center border-2 border-dashed border-neutral-800 rounded-3xl">
-                         <p className="text-neutral-500 text-sm">No hay tareas de inscripción definidas todavía.</p>
-                      </div>
-                   ) : (
-                      <div className="grid gap-3">
-                        {analysis.registrationChecklist.map((task, idx) => (
-                           <button 
-                             key={idx} 
-                             onClick={() => toggleTask(idx)}
-                             className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left group ${task.completed ? 'bg-lime-500/5 border-lime-500/20 opacity-80' : 'bg-neutral-900 border-white/5 hover:border-white/20 shadow-lg'}`}
-                           >
-                             <div className={`mt-0.5 shrink-0 transition-all ${task.completed ? 'text-lime-400 scale-110' : 'text-neutral-700 group-hover:text-neutral-500'}`}>
-                                {task.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                             </div>
-                             <div>
-                                <h5 className={`font-bold text-sm mb-1 transition-all ${task.completed ? 'text-lime-400/70 line-through' : 'text-white'}`}>
-                                   {task.task}
-                                </h5>
-                                <p className={`text-xs leading-relaxed transition-all ${task.completed ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                                   {task.description}
-                                </p>
-                             </div>
-                           </button>
-                        ))}
-                      </div>
-                   )}
-                </div>
-
-                {/* Info Box */}
-                <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-4 items-start">
-                   <AlertCircle className="text-blue-400 shrink-0" size={20} />
-                   <div>
-                      <h5 className="text-sm font-bold text-blue-300 mb-1">Recordatorio de Firma Digital</h5>
-                      <p className="text-xs text-neutral-500 leading-relaxed">
-                        Asegúrate de que todos los PDFs estén firmados con el certificado digital de la empresa antes de subirlos a la Plataforma de Contratación del Sector Público (PLACSP).
-                      </p>
-                   </div>
-                </div>
-             </div>
-           )}
         </div>
       </div>
     </div>

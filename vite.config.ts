@@ -7,20 +7,29 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   // Capturamos las variables de entorno para Gemini y Supabase
-  const apiKey = process.env.API_KEY || env.API_KEY || env.VITE_API_KEY || '';
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || env.GEMINI_API_KEY || env.API_KEY || env.VITE_API_KEY || '';
   const supabaseUrl = process.env.SUPABASE_URL || env.SUPABASE_URL || env.VITE_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '';
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+    ],
     define: {
       // Definimos específicamente las variables para que Vite las reemplace en el código del cliente
+      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
       'process.env.API_KEY': JSON.stringify(apiKey),
       'process.env.SUPABASE_URL': JSON.stringify(supabaseUrl),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(supabaseAnonKey)
     },
     optimizeDeps: {
       exclude: ['lucide-react'],
+      esbuildOptions: {
+        target: 'esnext',
+      },
+    },
+    esbuild: {
+      target: 'esnext',
     },
     build: {
       target: 'esnext',

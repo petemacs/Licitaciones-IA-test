@@ -34,7 +34,7 @@ const BusinessRulesEditor: React.FC<Props> = ({ rules, setRules }) => {
              onClick={() => setShowPreview(true)}
              className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${showPreview ? 'bg-lime-500/20 text-lime-400 shadow-sm' : 'text-neutral-400 hover:text-white'}`}
            >
-             <Eye size={12} /> System Prompt
+             <Eye size={12} /> Prompt del Sistema
            </button>
         </div>
       </div>

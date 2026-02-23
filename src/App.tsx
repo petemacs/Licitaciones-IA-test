@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layout, Loader2, Archive, Grid, Clock, ArrowRightCircle, HelpCircle, XCircle, ShieldAlert, Trash2, Database, Cloud } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Layout, Loader2, Archive, Grid, Clock, ArrowRightCircle, HelpCircle, XCircle, ShieldAlert, Trash2, Database, Cloud, Search, ArrowUpDown } from 'lucide-react';
 import NewTenderForm from './components/NewTenderForm';
 import BusinessRulesEditor from './components/BusinessRulesEditor';
 import TenderCard from './components/TenderCard';
@@ -41,10 +41,33 @@ const App: React.FC = () => {
   
   const [viewMode, setViewMode] = useState<ViewMode>('BOARD');
 
-  const [expedientFilter] = useState('');
-  const [nameFilter] = useState('');
+  const [expedientFilter, setExpedientFilter] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
   const [statusFilter] = useState<TenderStatus | ''>('');
-  const [sortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const parseDeadline = (dateStr: string | undefined): number => {
+    if (!dateStr) return 0;
+    // Intenta extraer fecha y hora: dd/mm/yyyy ... hh:mm
+    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:.*?(\d{2}):(\d{2}))?/);
+    if (match) {
+      const [_, day, month, year, hour, minute] = match;
+      return new Date(
+        parseInt(year), 
+        parseInt(month) - 1, 
+        parseInt(day), 
+        hour ? parseInt(hour) : 0, 
+        minute ? parseInt(minute) : 0
+      ).getTime();
+    }
+    return 0;
+  };
+
+  const formatDeadlineDisplay = (dateStr: string | undefined) => {
+    if (!dateStr) return '---';
+    // Limpiar "Hasta el " y " a las "
+    return dateStr.replace(/Hasta el /i, '').replace(/ a las /i, ' ');
+  };
   
   useEffect(() => {
     const init = async () => {
@@ -72,9 +95,18 @@ const App: React.FC = () => {
       let tenderToSave = { ...newTender };
 
       if (isCloudConfigured) {
-        if (newTender.summaryFile) tenderToSave.summaryUrl = await uploadFileToSupabase(newTender.summaryFile, 'summaries') || "";
-        if (newTender.adminFile) tenderToSave.adminUrl = await uploadFileToSupabase(newTender.adminFile, 'admin') || "";
-        if (newTender.techFile) tenderToSave.techUrl = await uploadFileToSupabase(newTender.techFile, 'tech') || "";
+        if (newTender.summaryFile) {
+          const url = await uploadFileToSupabase(newTender.summaryFile, 'summaries');
+          if (url) tenderToSave.summaryUrl = url;
+        }
+        if (newTender.adminFile) {
+          const url = await uploadFileToSupabase(newTender.adminFile, 'admin');
+          if (url) tenderToSave.adminUrl = url;
+        }
+        if (newTender.techFile) {
+          const url = await uploadFileToSupabase(newTender.techFile, 'tech');
+          if (url) tenderToSave.techUrl = url;
+        }
       }
 
       await saveTenderToStorage(tenderToSave);
@@ -172,9 +204,9 @@ const App: React.FC = () => {
       (statusFilter === '' || t.status === statusFilter)
     );
     result.sort((a, b) => {
-      const dateA = a.deadline || '';
-      const dateB = b.deadline || '';
-      return sortDirection === 'asc' ? dateA.localeCompare(dateB) : dateB.localeCompare(dateA);
+      const dateA = parseDeadline(a.deadline);
+      const dateB = parseDeadline(b.deadline);
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
     });
     return result;
   }, [tenders, expedientFilter, nameFilter, statusFilter, sortDirection]);
@@ -303,6 +335,27 @@ const App: React.FC = () => {
                  </div>
                </div>
 
+               <div className="flex gap-4 mb-6 px-2">
+                 <div className="relative flex-1 max-w-xs">
+                   <Search className="absolute left-3 top-2.5 text-neutral-500" size={14} />
+                   <input 
+                     value={expedientFilter}
+                     onChange={(e) => setExpedientFilter(e.target.value)}
+                     placeholder="Buscar por Nº Expediente..." 
+                     className="w-full pl-9 pr-4 py-2 bg-neutral-950/50 border border-white/10 rounded-xl text-xs text-white focus:border-lime-500/50 outline-none"
+                   />
+                 </div>
+                 <div className="relative flex-1 max-w-md">
+                   <Search className="absolute left-3 top-2.5 text-neutral-500" size={14} />
+                   <input 
+                     value={nameFilter}
+                     onChange={(e) => setNameFilter(e.target.value)}
+                     placeholder="Buscar por Título..." 
+                     className="w-full pl-9 pr-4 py-2 bg-neutral-950/50 border border-white/10 rounded-xl text-xs text-white focus:border-lime-500/50 outline-none"
+                   />
+                 </div>
+               </div>
+
                <div className="flex-1 overflow-auto rounded-3xl border border-white/10 bg-neutral-900/40 shadow-inner relative">
                   <table className="w-full text-left border-separate border-spacing-0 table-fixed min-w-[800px]">
                     <thead className="sticky top-0 bg-neutral-900/90 backdrop-blur-md z-20">
@@ -310,7 +363,15 @@ const App: React.FC = () => {
                         <th className="p-4 font-bold text-neutral-400 w-32 text-xs border-b border-white/5">Nº Expediente</th>
                         <th className="p-4 font-bold text-neutral-400 text-xs border-b border-white/5">Título del Expediente</th>
                         <th className="p-4 font-bold text-neutral-400 w-44 text-xs text-right border-b border-white/5">Presupuesto</th>
-                        <th className="p-4 font-bold text-neutral-400 w-36 text-xs text-center border-b border-white/5">Fecha Límite</th>
+                        <th 
+                          className="p-4 font-bold text-neutral-400 w-40 text-xs text-center border-b border-white/5 cursor-pointer hover:text-white transition-colors select-none group"
+                          onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            Fecha Límite
+                            <ArrowUpDown size={12} className={`transition-transform ${sortDirection === 'asc' ? 'rotate-0' : 'rotate-180'} opacity-50 group-hover:opacity-100`} />
+                          </div>
+                        </th>
                         <th className="p-4 font-bold text-neutral-400 w-36 text-xs text-center border-b border-white/5">Estado</th>
                       </tr>
                     </thead>
@@ -320,7 +381,7 @@ const App: React.FC = () => {
                           <td className="p-4 font-mono text-[10px] text-lime-400 font-bold">{t.expedientNumber || '---'}</td>
                           <td className="p-4 font-bold text-white text-[12px] truncate">{t.name}</td>
                           <td className="p-4 text-right text-emerald-400 font-bold text-[13px]">{t.budget || '---'}</td>
-                          <td className="p-4 text-center text-neutral-400 text-[10px]">{t.deadline || '---'}</td>
+                          <td className="p-4 text-center text-neutral-400 text-[10px]">{formatDeadlineDisplay(t.deadline)}</td>
                           <td className="p-4 text-center">
                              <div className={`inline-block px-2 py-1 rounded-full text-[9px] font-bold border ${statusConfigs[t.status].border} ${statusConfigs[t.status].color}`}>{statusConfigs[t.status].label}</div>
                           </td>

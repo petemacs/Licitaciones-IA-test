@@ -1,18 +1,21 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { TenderDocument, AnalysisResult } from "../types";
-// @ts-ignore
 import * as pdfjsLib from 'pdfjs-dist';
 
-if (typeof window !== 'undefined' && 'Worker' in window) {
-  // @ts-ignore
-  const version = pdfjsLib.version || (pdfjsLib.default && pdfjsLib.default.version) || '4.0.379';
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+// Configuración del worker de PDF.js
+if (typeof window !== 'undefined') {
+  try {
+    // @ts-ignore
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+  } catch (e) {
+    console.warn("Failed to initialize PDF.js worker:", e);
+  }
 }
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key no configurada.");
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key no configurada. Asegúrate de que la variable GEMINI_API_KEY está definida en el entorno.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -37,17 +40,26 @@ export const fetchFileFromUrl = async (url: string, defaultName: string): Promis
   };
 
   const attemptFetch = async (targetUrl: string) => {
-    const response = await fetch(targetUrl);
-    if (!response.ok) throw new Error(`Status ${response.status}`);
-    const blob = await response.blob();
-    if (blob.size < 1000) throw new Error("Archivo inválido");
-    return new File([blob], getCleanName(url, defaultName), { type: 'application/pdf' });
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/pdf' }
+      });
+      if (!response.ok) throw new Error(`Status ${response.status}`);
+      const blob = await response.blob();
+      if (blob.size < 500) throw new Error("Archivo demasiado pequeño (posible error HTML)");
+      return new File([blob], getCleanName(url, defaultName), { type: 'application/pdf' });
+    } catch (e) {
+      throw e;
+    }
   };
 
   const strategies = [
     () => attemptFetch(url),
     () => attemptFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
-    () => attemptFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
+    () => attemptFetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`),
+    () => attemptFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`),
+    () => attemptFetch(`https://cors-anywhere.herokuapp.com/${url}`) 
   ];
 
   for (const strategy of strategies) {
@@ -66,8 +78,9 @@ const fileToPart = async (file: File): Promise<{ inlineData?: { data: string; mi
     const reader = new FileReader();
     reader.onloadend = () => {
       if (typeof reader.result === 'string') {
-        resolve({ inlineData: { data: reader.result.split(',')[1], mimeType: file.type } });
-      } else reject(new Error("Failed base64"));
+        const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+        resolve({ inlineData: { data: reader.result.split(',')[1], mimeType } });
+      } else reject(new Error("Fallo en base64"));
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -117,10 +130,9 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
       resources: { type: Type.OBJECT, properties: { duration: { type: Type.STRING }, team: { type: Type.STRING }, dedication: { type: Type.STRING } } },
       solvency: { type: Type.OBJECT, properties: { certifications: { type: Type.STRING }, specificSolvency: { type: Type.STRING }, penalties: { type: Type.STRING } } },
       strategy: { type: Type.OBJECT, properties: { valuationCriteria: { type: Type.STRING }, angle: { type: Type.STRING } } },
-      scoring: { type: Type.OBJECT, properties: { priceWeight: { type: Type.NUMBER }, formulaWeight: { type: Type.NUMBER }, valueWeight: { type: Type.NUMBER }, details: { type: Type.STRING }, subCriteria: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, weight: { type: Type.NUMBER }, category: { type: Type.STRING } } } } } },
-      registrationChecklist: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { task: { type: Type.STRING }, description: { type: Type.STRING }, completed: { type: Type.BOOLEAN } } } }
+      scoring: { type: Type.OBJECT, properties: { priceWeight: { type: Type.NUMBER }, formulaWeight: { type: Type.NUMBER }, valueWeight: { type: Type.NUMBER }, details: { type: Type.STRING }, subCriteria: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, weight: { type: Type.NUMBER }, category: { type: Type.STRING } } } } } }
     },
-    required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring", "registrationChecklist"],
+    required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring"],
   };
 
   const response = await ai.models.generateContent({
@@ -146,39 +158,82 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
 export const extractMetadataFromTenderFile = async (file: File): Promise<any> => {
   const ai = getAiClient();
   const filePart = await fileToPart(file);
-  const prompt = `Extrae metadatos.`;
+  const prompt = `Analiza este documento de licitación (Hoja Resumen). Extrae los metadatos y BUSCA ACTIVAMENTE enlaces (URLs) que apunten a los pliegos.
+  IMPORTANTE SOBRE LAS URLs:
+  - Deben ser ABSOLUTAS (empezar por http:// o https://).
+  - Si encuentras una ruta relativa (ej: /wps/...), añadele delante "https://contrataciondelestado.es".
+  - adminUrl: Enlace al PCAP (Cláusulas Administrativas).
+  - techUrl: Enlace al PPT (Prescripciones Técnicas).`;
+
   const responseSchema = {
     type: Type.OBJECT,
-    properties: { name: { type: Type.STRING }, budget: { type: Type.STRING }, expedientNumber: { type: Type.STRING }, deadline: { type: Type.STRING }, tenderPageUrl: { type: Type.STRING }, scoringSystem: { type: Type.STRING } },
+    properties: { 
+      name: { type: Type.STRING }, 
+      budget: { type: Type.STRING }, 
+      expedientNumber: { type: Type.STRING }, 
+      deadline: { type: Type.STRING }, 
+      tenderPageUrl: { type: Type.STRING }, 
+      scoringSystem: { type: Type.STRING },
+      adminUrl: { type: Type.STRING, description: "URL ABSOLUTA al documento PCAP" },
+      techUrl: { type: Type.STRING, description: "URL ABSOLUTA al documento PPT" }
+    },
     required: ["name", "budget", "expedientNumber", "deadline", "scoringSystem"]
   };
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: { parts: [filePart!, { text: prompt }] },
     config: { responseMimeType: "application/json", responseSchema: responseSchema }
   });
-  return parseAiJson(response.text || "{}");
+  
+  const result = parseAiJson(response.text || "{}");
+
+  // Validación extra de seguridad por si la IA falla
+  const fixUrl = (url?: string) => {
+    if (!url) return "";
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return `https://contrataciondelestado.es${url}`;
+    return url;
+  };
+
+  if (result.adminUrl) result.adminUrl = fixUrl(result.adminUrl);
+  if (result.techUrl) result.techUrl = fixUrl(result.techUrl);
+
+  return result;
 };
 
 export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    // @ts-ignore
-    const pdfjs = pdfjsLib.getDocument ? pdfjsLib : pdfjsLib.default;
-    const pdfDoc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const links: Set<string> = new Set();
-    for (let i = 1; i <= Math.min(pdfDoc.numPages, 10); i++) {
+    
+    for (let i = 1; i <= Math.min(pdfDoc.numPages, 5); i++) {
       const page = await pdfDoc.getPage(i);
       const annotations = await page.getAnnotations();
+      
       for (const ant of annotations) {
         if (ant.subtype === 'Link' && ant.url) {
-           const url = ant.url.toLowerCase();
-           if (url.includes('.pdf') || url.includes('contrataciondelestado')) links.add(ant.url);
+           let url = ant.url;
+           // Normalizar URL relativa si es necesario
+           if (url.startsWith('/')) {
+             url = `https://contrataciondelestado.es${url}`;
+           }
+           
+           // Filtrar solo enlaces relevantes (PDFs o rutas de descarga)
+           if (url.toLowerCase().includes('.pdf') || 
+               url.includes('contrataciondelestado.es') || 
+               url.includes('/wps/wcm/connect/')) {
+             links.add(url);
+           }
         }
       }
     }
     return Array.from(links);
-  } catch (e) { return []; }
+  } catch (e) { 
+    console.error("Error extrayendo enlaces del PDF:", e);
+    return []; 
+  }
 };
 
 export const probeLinksInBatches = async (links: string[]): Promise<any> => {

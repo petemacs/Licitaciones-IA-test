@@ -1,7 +1,7 @@
 
 import { supabase, isCloudConfigured } from './supabaseClient';
 import { TenderDocument, TenderStatus } from '../types';
-import { get, set, del } from 'idb-keyval';
+import { get, set } from 'idb-keyval';
 
 const BUCKET_NAME = 'tender-documents';
 const LOCAL_STORAGE_KEY = 'tenders_local_data';
@@ -131,20 +131,27 @@ export const saveTenderToStorage = async (tender: TenderDocument) => {
 };
 
 export const deleteTenderFromStorage = async (tender: TenderDocument) => {
-  const currentTenders = (await get(LOCAL_STORAGE_KEY)) || [];
-  await set(LOCAL_STORAGE_KEY, currentTenders.filter((t: any) => t.id !== tender.id));
-
+  // 1. Si hay nube, borrar primero de la nube para asegurar consistencia
   if (isCloudConfigured) {
     try {
+      // Borrar archivos asociados (si fallan, seguimos intentando borrar el registro)
       if (tender.summaryUrl) await deleteFileFromSupabase(tender.summaryUrl);
       if (tender.adminUrl && tender.adminUrl.includes(BUCKET_NAME)) await deleteFileFromSupabase(tender.adminUrl);
       if (tender.techUrl && tender.techUrl.includes(BUCKET_NAME)) await deleteFileFromSupabase(tender.techUrl);
 
-      await supabase.from('tenders').delete().eq('id', tender.id);
+      // Borrar registro de la tabla
+      const { error } = await supabase.from('tenders').delete().eq('id', tender.id);
+      if (error) throw error;
     } catch (error) {
-      console.error('Error deleting tender record:', error);
+      console.error('Error deleting tender record from Supabase:', error);
+      // Re-lanzamos el error para evitar que se borre de local si falló la nube
+      throw new Error("Error al eliminar de la base de datos remota. Inténtalo de nuevo.");
     }
   }
+
+  // 2. Si todo salió bien (o no hay nube), borrar de local
+  const currentTenders = (await get(LOCAL_STORAGE_KEY)) || [];
+  await set(LOCAL_STORAGE_KEY, currentTenders.filter((t: any) => t.id !== tender.id));
 };
 
 export const loadRulesFromStorage = async (defaultRules: string): Promise<string> => {

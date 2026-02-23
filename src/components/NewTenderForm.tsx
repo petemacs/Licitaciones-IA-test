@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Upload, Link as LinkIcon, FileText, X, Loader2, FileCheck, Trash2, Globe, Euro, BarChart3, Fingerprint, CalendarDays, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Plus, Upload, Link as LinkIcon, FileText, X, Loader2, FileCheck, Trash2, Globe, Euro, Fingerprint, CheckCircle2, ExternalLink } from 'lucide-react';
 import { TenderDocument, TenderStatus } from '../types';
 import { extractMetadataFromTenderFile, scrapeDocsFromWeb, extractLinksFromPdf, probeLinksInBatches, fetchFileFromUrl } from '../services/geminiService';
 
@@ -126,6 +126,17 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
         if (metadata.tenderPageUrl) setTenderPageUrl(metadata.tenderPageUrl);
         if (metadata.scoringSystem) setScoringSystem(metadata.scoringSystem);
 
+        // Si la IA encontró enlaces directos en el texto del PDF, los usamos
+        if (metadata.adminUrl) {
+          setAdminUrl(metadata.adminUrl);
+          addLog(`> Detectado enlace PCAP: ${metadata.adminUrl.substring(0, 30)}...`);
+        }
+        if (metadata.techUrl) {
+          setTechUrl(metadata.techUrl);
+          addLog(`> Detectado enlace PPT: ${metadata.techUrl.substring(0, 30)}...`);
+        }
+
+        // Mantenemos la lógica anterior por si acaso (aunque extractLinksFromPdf esté vacío por ahora)
         const rawLinks = await extractLinksFromPdf(file);
         if (rawLinks.length > 0) {
           addLog(`> Detectados ${rawLinks.length} enlaces. Identificando pliegos...`);
@@ -134,7 +145,10 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
           if (probe.techUrl) setTechUrl(probe.techUrl);
         }
         addLog("> Análisis de resumen listo.");
-      } catch (err) { addLog("  [!] Error al procesar PDF."); }
+      } catch (err: any) { 
+        console.error(err);
+        addLog(`  [!] Error: ${err.message || "Error al procesar PDF."}`); 
+      }
       finally { setIsExtracting(false); }
     } else {
       if (type === 'admin') setAdminFile(file);
@@ -156,19 +170,27 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
 
   const UploadZone = ({ type, file, url, label }: { type: 'summary' | 'admin' | 'tech', file: File | null, url?: string, label: string }) => {
     const downloading = type !== 'summary' ? isDownloading[type as 'admin' | 'tech'] : false;
+    const hasUrlOnly = !file && url && url.length > 0;
     
-    if (file || (url && url.length > 0) || downloading) {
+    if (file || hasUrlOnly || downloading) {
       return (
-        <div className={`relative bg-neutral-900 border rounded-xl p-3 shadow-lg flex items-center gap-3 transition-all ${file ? 'border-lime-500/30 bg-lime-500/5' : downloading ? 'border-blue-500/30 animate-pulse bg-blue-500/5' : 'border-amber-500/20 bg-amber-500/5'}`}>
+        <div className={`relative bg-neutral-900 border rounded-xl p-3 shadow-lg flex items-center gap-3 transition-all ${file ? 'border-lime-500/30 bg-lime-500/5' : downloading ? 'border-blue-500/30 animate-pulse bg-blue-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
            {file && <div className="absolute -top-2 -right-2 bg-lime-500 text-black p-0.5 rounded-full shadow-lg border border-black/20"><CheckCircle2 size={12} /></div>}
-           <div className={`p-2 rounded-lg border border-white/5 shrink-0 ${file ? 'bg-neutral-800 text-lime-400' : 'bg-neutral-800 text-blue-400'}`}>
+           <div className={`p-2 rounded-lg border border-white/5 shrink-0 ${file ? 'bg-neutral-800 text-lime-400' : downloading ? 'bg-neutral-800 text-blue-400' : 'bg-amber-900/20 text-amber-400'}`}>
                {downloading ? <Loader2 size={18} className="animate-spin" /> : (type === 'summary' ? <FileText size={18} /> : (file ? <FileCheck size={18} /> : <LinkIcon size={18} />))}
            </div>
            <div className="min-w-0 flex-1">
                <p className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider">{label}</p>
-               <p className={`text-xs font-medium truncate ${file ? 'text-white' : 'text-neutral-400 italic'}`}>
-                 {downloading ? "Capturando binario..." : (file ? file.name : "URL Localizada")}
-               </p>
+               <div className="flex flex-col">
+                 <p className={`text-xs font-medium truncate ${file ? 'text-white' : 'text-amber-200'}`}>
+                   {downloading ? "Capturando binario..." : (file ? file.name : "Enlace detectado")}
+                 </p>
+                 {hasUrlOnly && !downloading && (
+                   <a href={url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-500 hover:underline truncate flex items-center gap-1 mt-0.5">
+                     {url} <ExternalLink size={10} />
+                   </a>
+                 )}
+               </div>
            </div>
            {!downloading && (
              <button type="button" onClick={() => {
@@ -242,7 +264,7 @@ const NewTenderForm: React.FC<Props> = ({ onAddTender, tenders }) => {
 
         <button type="submit" disabled={duplicateError || isWorking} className={`w-full ${duplicateError ? 'bg-red-500/20 text-red-500' : isWorking ? 'bg-neutral-800 text-neutral-600' : 'bg-lime-400 hover:bg-lime-300 text-black'} font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 shadow-lg`}>
           {isWorking ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} strokeWidth={2.5} />}
-          <span>{isWorking ? 'CAPTURING BINARIES...' : 'Confirmar Expediente'}</span>
+          <span>{isWorking ? 'CAPTURANDO BINARIOS...' : 'Confirmar Expediente'}</span>
         </button>
       </form>
     </div>
