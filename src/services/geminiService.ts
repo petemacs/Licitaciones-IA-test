@@ -136,13 +136,13 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
   };
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-1.5-flash',
     contents: { parts },
     config: { 
       systemInstruction: buildAnalysisSystemPrompt(rules), 
       responseMimeType: "application/json", 
       responseSchema: responseSchema,
-      tools: [{ googleSearch: {} }] 
+      // tools: [{ googleSearch: {} }] // Google Search no está disponible en 1.5-flash standard a veces, lo quitamos por seguridad
     },
   });
 
@@ -181,7 +181,7 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<any> =>
   };
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: { parts: [filePart!, { text: prompt }] },
     config: { responseMimeType: "application/json", responseSchema: responseSchema }
   });
@@ -246,7 +246,7 @@ export const probeLinksInBatches = async (links: string[]): Promise<any> => {
     required: ["adminUrl", "techUrl"]
   };
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: prompt,
     config: { responseMimeType: "application/json", responseSchema: responseSchema },
   });
@@ -256,9 +256,9 @@ export const probeLinksInBatches = async (links: string[]): Promise<any> => {
 export const scrapeDocsFromWeb = async (pageUrl: string): Promise<any> => {
   const ai = getAiClient();
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: `Busca PCAP y PPT en: ${pageUrl}.`,
-    config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" },
+    config: { responseMimeType: "application/json" },
   });
   return parseAiJson(response.text || "{}");
 };
