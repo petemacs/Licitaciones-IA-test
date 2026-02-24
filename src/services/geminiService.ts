@@ -19,6 +19,34 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// Función auxiliar para reintentar peticiones en caso de error 429 (Cuota)
+const generateContentWithRetry = async (modelName: string, params: any, retries = 3): Promise<any> => {
+  const ai = getAiClient();
+  
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await ai.models.generateContent({
+        model: modelName,
+        ...params
+      });
+    } catch (error: any) {
+      // Si es el último intento, lanzamos el error
+      if (i === retries - 1) throw error;
+      
+      // Si el error es 429 (Resource Exhausted) o 503 (Service Unavailable), esperamos y reintentamos
+      if (error.status === 429 || error.code === 429 || error.status === 503 || error.message?.includes('429')) {
+        const waitTime = Math.pow(2, i) * 2000; // Exponential backoff: 2s, 4s, 8s...
+        console.warn(`Cuota excedida (429). Reintentando en ${waitTime/1000}s... (Intento ${i+1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      // Si es otro error, lanzamos inmediatamente
+      throw error;
+    }
+  }
+};
+
 export const buildAnalysisSystemPrompt = (rules: string) => {
   return `Eres un experto senior en licitaciones públicas españolas. Tu misión es analizar la VIABILIDAD técnica y administrativa de un expediente basándote en:
 1. REGLAS DE NEGOCIO DEL USUARIO: ${rules}
@@ -98,7 +126,6 @@ const parseAiJson = (text: string) => {
 };
 
 export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: string): Promise<AnalysisResult> => {
-  const ai = getAiClient();
   const filesToProcess: File[] = [];
 
   // Descargar archivos si están en la nube pero no en local
@@ -135,14 +162,13 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
     required: ["decision", "summaryReasoning", "economic", "scope", "resources", "solvency", "strategy", "scoring"],
   };
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash-exp',
+  const response = await generateContentWithRetry('gemini-3-flash-preview', {
     contents: { parts },
     config: { 
       systemInstruction: buildAnalysisSystemPrompt(rules), 
       responseMimeType: "application/json", 
       responseSchema: responseSchema,
-      // tools: [{ googleSearch: {} }] 
+      tools: [{ googleSearch: {} }] 
     },
   });
 
@@ -156,7 +182,6 @@ export const analyzeTenderWithGemini = async (tender: TenderDocument, rules: str
 };
 
 export const extractMetadataFromTenderFile = async (file: File): Promise<any> => {
-  const ai = getAiClient();
   const filePart = await fileToPart(file);
   const prompt = `Analiza este documento de licitación (Hoja Resumen). Extrae los metadatos y BUSCA ACTIVAMENTE enlaces (URLs) que apunten a los pliegos.
   IMPORTANTE SOBRE LAS URLs:
@@ -180,8 +205,7 @@ export const extractMetadataFromTenderFile = async (file: File): Promise<any> =>
     required: ["name", "budget", "expedientNumber", "deadline", "scoringSystem"]
   };
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp",
+  const response = await generateContentWithRetry("gemini-3-flash-preview", {
     contents: { parts: [filePart!, { text: prompt }] },
     config: { responseMimeType: "application/json", responseSchema: responseSchema }
   });
@@ -238,15 +262,13 @@ export const extractLinksFromPdf = async (file: File): Promise<string[]> => {
 
 export const probeLinksInBatches = async (links: string[]): Promise<any> => {
   if (links.length === 0) return {};
-  const ai = getAiClient();
   const prompt = `Identifica PCAP y PPT: ${links.join(', ')}`;
   const responseSchema = {
     type: Type.OBJECT,
     properties: { adminUrl: { type: Type.STRING }, techUrl: { type: Type.STRING } },
     required: ["adminUrl", "techUrl"]
   };
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp",
+  const response = await generateContentWithRetry("gemini-3-flash-preview", {
     contents: prompt,
     config: { responseMimeType: "application/json", responseSchema: responseSchema },
   });
@@ -254,11 +276,9 @@ export const probeLinksInBatches = async (links: string[]): Promise<any> => {
 };
 
 export const scrapeDocsFromWeb = async (pageUrl: string): Promise<any> => {
-  const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp",
+  const response = await generateContentWithRetry("gemini-3-flash-preview", {
     contents: `Busca PCAP y PPT en: ${pageUrl}.`,
-    config: { responseMimeType: "application/json" },
+    config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" },
   });
   return parseAiJson(response.text || "{}");
 };
